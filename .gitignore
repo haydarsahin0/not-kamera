@@ -1,0 +1,6 @@
+.env
+config.h
+*.sqlite3*
+__pycache__/
+.venv/
+node_modules/
