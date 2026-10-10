@@ -1,6 +1,6 @@
-# Not Ekran V2 — 0.4.0
+# Not Ekran V2 — 0.4.1
 
-**0.1.0 metin gönderimi kullanıcı tarafından fiziksel cihazda doğrulandı. Yeni 0.4.0 fotoğraf köprüsünün gerçek iPhone/API testi bekliyor.**
+**0.1.0 metin gönderimi kullanıcı tarafından fiziksel cihazda doğrulandı. Yeni 0.4.1 fotoğraf köprüsünün gerçek iPhone/API testi bekliyor.**
 
 Yalnızca Waveshare ESP32-S3-ePaper-1.54 V2 (8 MB flash / 8 MB PSRAM).
 V1, başka kart veya farklı panel için kullanılmaz. Telefon fotoğrafını HTTPS sunucuya gönderip OpenAI yanıtını ekrana aktaran yerel arayüz içerir.
@@ -95,12 +95,15 @@ Fabrika geri dönüşü: üretici reposundaki `03_Firmware/V2-FactoryProgram.bin
 
 ## Canlı Supabase bağlantısı
 
-0.4.0 cihaz sayfası Supabase fonksiyon adresini varsayılan doldurur ve HTTPS adresinde /functions/v1/not-kamera-api yolunu kabul eder. Kurulum fragment'i bağlantıyı doldurur; uygulama erişim kodu CSRF korumalı POST ile cihazın NVS alanına kaydedilir. Derlenmiş dosyada hiçbir kullanıcı sırrı bulunmaz. OpenAI modeli sunucuda GPT-6.1 Sol olarak sabittir. Ana README canlı kurulum ve test durumunu açıklar.
+0.4.1 cihaz sayfası Supabase fonksiyon adresini varsayılan doldurur ve HTTPS adresinde /functions/v1/not-kamera-api yolunu kabul eder. Kurulum fragment'i bağlantıyı doldurur; uygulama erişim kodu CSRF korumalı POST ile cihazın NVS alanına kaydedilir. Derlenmiş dosyada hiçbir kullanıcı sırrı bulunmaz. OpenAI modeli sunucuda GPT-6.1 Sol olarak sabittir. Ana README canlı kurulum ve test durumunu açıklar.
 
-## 0.4.0 teslimat ve gezinme
+## 0.4.1 teslimat ve gezinme
 
 Ana siteden gönderilen her fotoğraf cihaz için seçilir. Cihaz /api/device/poll ile tam metni alır, X-Text-Bytes ve X-Text-Sha256 başlıklarını doğrular. Ekran yenilendikten sonra delivery UUID'siyle /api/device/ack çağrılır. Eski onay yeni cevabı onaylayamaz. Cihaz internet erişimi olan Wi-Fi'de olmalıdır; internetsiz NotEkran ağı yalnızca kurulum içindir. iPhone hotspot + Uyumluluğu En Üst Düzeye Çıkar fiziksel olarak test edilmelidir.
 
 Metin kısaltılmaz; 64 KiB sınırında hata verilir. Yeni cevap tüm soruları sırayla sayfalara böler. Eski fotoğraflar sitedeki geçmişten yeniden gönderilebilir. NVS Wi-Fi ve uygulama kodunu korur, cevap RAM'dedir ve yeniden açılınca son bulut cevabı yeniden alınır.
 
 Testler: node --test supabase/tests/*.test.mjs; node firmware/tests/test_camera.cjs; g++ -std=c++17 firmware/tools/test_navigation.cpp -o /tmp/navigation && /tmp/navigation.
+
+
+0.4.1 düzeltmesi: Cihazın yerel /camera sayfasındaki eşleştirme yalnızca CSRF korumalı /api/cloud POST yapar. İnternetsiz NotEkran kurulum ağında önce sunucu/model kontrolü yapılmaz. Kayıt başarılıysa eşleştirme tamamlandı mesajı gösterilir; ağ hatasında kaydedildi denmez. İlk fotoğraf ve gerçek model kontrolü HTTPS ana sitede internet bağlantısıyla yapılır. Telefon kendi internetini paylaşırken cihaz ayarları iPad üzerinden yapılabilir.
