@@ -8,12 +8,13 @@
 #include "text_layout.h"
 #include "unicode_text.h"
 #include "page_rotation.h"
+#include "screen_visibility.h"
 #include "camera_page.h"
 #include "cloud_delivery.h"
 #include "button_navigation.h"
 
 // Waveshare ESP32-S3-ePaper-1.54 V2 only. GPIOs from vendor V2 examples.
-constexpr int EPD_POWER=6, AUDIO_POWER=42, BATTERY_HOLD=17, BOOT_KEY=0;
+constexpr int EPD_POWER=6, AUDIO_POWER=42, BATTERY_HOLD=17, BOOT_KEY=0, PWR_KEY=18;
 WebServer server(80);
 Preferences prefs;
 epaper_driver_display *panel=nullptr;
@@ -34,6 +35,9 @@ uint32_t textRevision=0, renderedRevision=0;
 String activeDelivery;
 ButtonNavigation navigation;
 PageRotation rotation;
+ScreenVisibility visibility;
+ScreenPowerButton powerButton;
+bool displayRailOn=true;
 PhotoRequest *uploadPhoto=nullptr;String uploadError;bool uploadReserved=false;
 uint32_t shownPhotoRevision=0;bool showPhotoProgress=false;
 
@@ -55,23 +59,34 @@ String formStart(const char* action){return String("<form method='post' action='
 void root(){
  if(!authorized())return;
  String h=R"HTML(<!doctype html><html lang="tr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Not Ekran</title><style>
- body{font:17px system-ui;background:#f0f4f8;color:#173044;max-width:620px;margin:auto;padding:22px}h1{margin-bottom:6px}section{background:white;border-radius:18px;padding:20px;margin:18px 0}label{display:block;margin:12px 0}input,textarea,select,button{font:inherit;box-sizing:border-box;width:100%;padding:12px;border:1px solid #b9cbd6;border-radius:9px}textarea{min-height:170px}button{background:#185ed2;color:white;border:0;margin:8px 0;cursor:pointer}small{display:block;line-height:1.5;color:#526b7c}.buttons{display:flex;gap:8px}.buttons form{flex:1}code{overflow-wrap:anywhere}a{color:#185ed2}</style><h1>Not Ekran</h1><small>V2 · 0.6.0 · Metin ve fotoğraf</small><section><strong>Bağlantı</strong><p>)HTML";
+ body{font:17px system-ui;background:#f0f4f8;color:#173044;max-width:620px;margin:auto;padding:22px}h1{margin-bottom:6px}section{background:white;border-radius:18px;padding:20px;margin:18px 0}label{display:block;margin:12px 0}input,textarea,select,button{font:inherit;box-sizing:border-box;width:100%;padding:12px;border:1px solid #b9cbd6;border-radius:9px}textarea{min-height:170px}button{background:#185ed2;color:white;border:0;margin:8px 0;cursor:pointer}small{display:block;line-height:1.5;color:#526b7c}.buttons{display:flex;gap:8px}.buttons form{flex:1}code{overflow-wrap:anywhere}a{color:#185ed2}</style><h1>Not Ekran</h1><small>V2 · 0.7.0 · Metin ve fotoğraf</small><section><strong>Bağlantı</strong><p>)HTML";
  h+=WiFi.status()==WL_CONNECTED?"Wi-Fi bağlı. Yerel adres: <code>http://"+WiFi.localIP().toString()+"</code>":"Wi-Fi bağlı değil. Cihazın kendi ağı üzerinden kullanabilirsin.";
  if(!panel->healthy)h+="<p><strong>Ekran yanıt vermedi. Kurulumu durdur; V2 kartı ve bağlantıyı kontrol et.</strong></p>";
  h+="</p><small>Kurulum ağı: "+htmlEscape(apName)+" · http://192.168.4.1<br>Sayfa "+String(currentPage+1)+" / "+String(pageCount());
  if(receivedAt)h+=" · Son metin "+String((millis()-receivedAt)/1000)+" saniye önce alındı";
  h+="<br>Bulut: "+htmlEscape(cloudGetError());
  h+="</small></section><section><h2>Fotoğraftan açıklama</h2><p><a href='/camera'>Fotoğraf çek ve cevabı ekrana gönder →</a></p><small>Fotoğrafı bu cihaz sayfasından yükle. Cihaz internet geldiğinde gönderir ve cevabı ekranda gösterir. OpenAI anahtarı Supabase’de kalır.</small></section><section><h2>Metin gönder</h2>"+formStart("/text");
- h+=R"HTML(<label>Metin<textarea name="text" maxlength="65536" required placeholder="Merhaba"></textarea></label><label>Yazı boyutu<select name="size"><option value="2">Büyük · 20 px</option><option value="1">Orta · 16 px</option></select></label><button>Metni ekrana gönder</button><small>En fazla 65536 UTF-8 bayt. Uzun metin sayfalara ayrılır. Türkçe/Almanca harfler ve yaygın matematik simgeleri korunur. Nadir desteklenmeyen karakterler ? yerine [U+XXXX] koduyla belirtilir. Sayfalar 30 saniyede otomatik ilerler; son sayfadan ilk sayfaya döner. Butonla geçişte süre yeniden başlar. Metin sayfalara ayrılır; hiçbir bölüm kısaltılmaz. Yeniden başlatılınca son bulut cevabı tekrar alınır.</small></form><div class="buttons">)HTML";
+ h+=R"HTML(<label>Metin<textarea name="text" maxlength="65536" required placeholder="Merhaba"></textarea></label><label>Yazı boyutu<select name="size"><option value="2">Standart · 18 px</option><option value="1">Orta · 16 px</option></select></label><button>Metni ekrana gönder</button><small>En fazla 65536 UTF-8 bayt. Uzun metin sayfalara ayrılır. Türkçe/Almanca harfler ve yaygın matematik simgeleri korunur. Nadir desteklenmeyen karakterler ? yerine [U+XXXX] koduyla belirtilir. Sayfalar 30 saniyede otomatik ilerler; son sayfadan ilk sayfaya döner. Butonla geçişte süre yeniden başlar. Metin sayfalara ayrılır; hiçbir bölüm kısaltılmaz. Yeniden başlatılınca son bulut cevabı tekrar alınır.</small></form><div class="buttons">)HTML";
  h+=formStart("/previous")+"<button>Önceki</button></form>"+formStart("/next")+"<button>Sonraki</button></form></div>";
+ h+=formStart("/display")+"<button>"+(visibility.hidden()?String("Ekranı aç; kaldığın sayfaya dön"):String("Ekranı kapat; sayfayı koru"))+"</button></form>";
  h+=formStart("/help")+"<button>Bağlantı bilgilerini göster</button></form>"+formStart("/read")+"<button>Metne dön</button></form>"+formStart("/clear")+"<button>Ekrandaki metni sil</button></form></section>";
  h+="<section><h2>Wi-Fi ayarı</h2>"+formStart("/wifi");
  h+="<label>Ağ adı<input name='ssid' maxlength='32' required value='"+htmlEscape(savedSsid)+"' autocomplete='off'></label>";
- h+=R"HTML(<label>Ağ şifresi<input name="password" type="password" minlength="8" maxlength="63" required autocomplete="new-password"></label><button>Kaydet ve bağlan</button><small>2,4 GHz, kişisel şifreli ağ kullan. iPhone erişim noktasında gerekirse “Uyumluluğu En Üst Düzeye Çıkar” seçeneğini aç. eduroam ve giriş sayfalı ağlar bu sürümde desteklenmez. Şifre yanlışsa cihazın kendi ağı açık kalır. Bağlanmayı denedikten sonra bu sayfayı yenile.</small></form></section><small>BOOT: tek basış sonraki, çift basış önceki sayfa; 3 saniye basılı tut: bağlantı bilgileri. USB'yi takarken BOOT'a basılı tutma; bu yükleme moduna geçirir. Yalnızca güvendiğin yerel ağda kullan; bu HTTP arayüzünü internete açma.</small></html>)HTML";
+ h+=R"HTML(<label>Ağ şifresi<input name="password" type="password" minlength="8" maxlength="63" required autocomplete="new-password"></label><button>Kaydet ve bağlan</button><small>2,4 GHz, kişisel şifreli ağ kullan. iPhone erişim noktasında gerekirse “Uyumluluğu En Üst Düzeye Çıkar” seçeneğini aç. eduroam ve giriş sayfalı ağlar bu sürümde desteklenmez. Şifre yanlışsa cihazın kendi ağı açık kalır. Bağlanmayı denedikten sonra bu sayfayı yenile.</small></form></section><small>BOOT: tek basış sonraki, çift basış önceki sayfa; 3 saniye basılı tut: bağlantı bilgileri. PWR kısa basış: ekranı kapat/aç; aynı sayfa korunur. USB'yi takarken BOOT'a basılı tutma; bu yükleme moduna geçirir. Yalnızca güvendiğin yerel ağda kullan; bu HTTP arayüzünü internete açma.</small></html>)HTML";
  server.sendHeader("Cache-Control","no-store");server.sendHeader("X-Frame-Options","DENY");
  server.send(200,"text/html; charset=utf-8",h);
 }
 void paint(){
+ const ScreenFrame frame=visibility.frame(dirty);
+ if(frame==ScreenFrame::None)return;
+ if(!displayRailOn){digitalWrite(EPD_POWER,LOW);displayRailOn=true;delay(100);}
+ if(frame==ScreenFrame::Blank){
+  panel->EPD_Clear();
+  if(panel->healthy){panel->EPD_Init();if(panel->healthy)panel->EPD_Display();}
+  // Never acknowledge a blank as a rendered answer.
+  if(panel->healthy){digitalWrite(EPD_POWER,HIGH);displayRailOn=false;visibility.painted(frame);}
+  dirty=false;lastPaint=millis();rotation.pause();return;
+ }
  panel->EPD_Clear();canvas.setTextColor(0);canvas.setTextWrap(false);canvas.setTextSize(1);canvas.setCursor(4,3);
  if(showPhotoProgress){
   canvas.println("FOTOGRAF / NOT EKRAN");
@@ -98,7 +113,7 @@ void paint(){
  }
  if(panel->healthy){panel->EPD_Init();if(panel->healthy)panel->EPD_Display();}
  if(panel->healthy){renderedRevision=textRevision;if(activeDelivery.length()&&!helpVisible){cloudRendered(activeDelivery,pageCount());photoRendered();}}
- dirty=false;lastPaint=millis();
+ dirty=false;lastPaint=millis();visibility.painted(frame);
  if(panel->healthy&&!helpVisible&&!showPhotoProgress&&!lines.empty())rotation.shown(lastPaint);else rotation.pause();
 }
 bool acceptText(const String &t,const String &size){
@@ -111,7 +126,8 @@ void setup(){
  pinMode(BATTERY_HOLD,OUTPUT);digitalWrite(BATTERY_HOLD,HIGH);
  pinMode(AUDIO_POWER,OUTPUT);digitalWrite(AUDIO_POWER,HIGH);
  pinMode(EPD_POWER,OUTPUT);digitalWrite(EPD_POWER,LOW);
- pinMode(BOOT_KEY,INPUT_PULLUP);Serial.begin(115200);
+ pinMode(BOOT_KEY,INPUT_PULLUP);pinMode(PWR_KEY,INPUT_PULLUP);
+ powerButton.begin(digitalRead(PWR_KEY)==LOW,millis());Serial.begin(115200);
  delay(100);
  custom_lcd_spi_t pins={11,10,9,8,13,12,SPI2_HOST,5000};
  panel=new epaper_driver_display(200,200,pins);
@@ -132,7 +148,7 @@ void setup(){
   String token=server.arg("token");
   if(!token.isEmpty()&&!validCloudToken(token)){server.send(400,"application/json","{\"detail\":\"Erisim kodu gecersiz.\"}");return;}
   prefs.putString("cloud-token",token);cloudSetToken(token);
-  server.send(200,"application/json","{\"saved\":true,\"version\":\"0.6.0\"}");
+  server.send(200,"application/json","{\"saved\":true,\"version\":\"0.7.0\"}");
  });
  server.on("/camera",HTTP_GET,[]{
   if(!authorized())return;
@@ -149,6 +165,7 @@ void setup(){
   cJSON_AddStringToObject(doc,"state",photoState.c_str());cJSON_AddStringToObject(doc,"detail",photoDetail.c_str());
   cJSON_AddStringToObject(doc,"cloud",cloudError.c_str());cJSON_AddStringToObject(doc,"job",photoJob.c_str());
   xSemaphoreGive(cloudLock);
+  cJSON_AddBoolToObject(doc,"screen_hidden",visibility.hidden());
   cJSON_AddBoolToObject(doc,"wifi",WiFi.status()==WL_CONNECTED);cJSON_AddBoolToObject(doc,"clock",time(nullptr)>=1767225600);
   cJSON_AddNumberToObject(doc,"pages",pageCount());cJSON_AddBoolToObject(doc,"healthy",panel->healthy);
   char* json=cJSON_PrintUnformatted(doc);server.sendHeader("Cache-Control","no-store");server.send(200,"application/json",json);cJSON_free(json);cJSON_Delete(doc);
@@ -214,8 +231,9 @@ void setup(){
   if(s.length()==0||s.length()>32||p.length()<8||p.length()>63){server.send(400,"text/plain","Ag adi veya sifre uzunlugu gecersiz.");return;}
   savedSsid=s;savedPassword=p;prefs.putString("ssid",s);prefs.putString("wifi-pass",p);connectPending=true;redirect();
  });
- server.on("/next",HTTP_POST,[]{if(!mutationAllowed())return;currentPage=(currentPage+1)%pageCount();helpVisible=false;dirty=true;redirect();});
- server.on("/previous",HTTP_POST,[]{if(!mutationAllowed())return;currentPage=(currentPage+pageCount()-1)%pageCount();helpVisible=false;dirty=true;redirect();});
+ server.on("/display",HTTP_POST,[]{if(!mutationAllowed())return;visibility.toggle();rotation.pause();navigation=ButtonNavigation();dirty=true;redirect();});
+ server.on("/next",HTTP_POST,[]{if(!mutationAllowed())return;if(visibility.hidden()){server.send(409,"text/plain; charset=utf-8","Önce ekranı aç.");return;}currentPage=(currentPage+1)%pageCount();helpVisible=false;dirty=true;redirect();});
+ server.on("/previous",HTTP_POST,[]{if(!mutationAllowed())return;if(visibility.hidden()){server.send(409,"text/plain; charset=utf-8","Önce ekranı aç.");return;}currentPage=(currentPage+pageCount()-1)%pageCount();helpVisible=false;dirty=true;redirect();});
  server.on("/help",HTTP_POST,[]{if(!mutationAllowed())return;helpVisible=true;dirty=true;redirect();});
  server.on("/read",HTTP_POST,[]{if(!mutationAllowed())return;helpVisible=false;dirty=true;redirect();});
  server.on("/clear",HTTP_POST,[]{if(!mutationAllowed())return;lines.clear();currentPage=0;receivedAt=0;++textRevision;helpVisible=false;dirty=true;redirect();});
@@ -224,26 +242,30 @@ void setup(){
 }
 void loop(){
  server.handleClient();
+ if(powerButton.update(digitalRead(PWR_KEY)==LOW,millis())){
+  visibility.toggle();rotation.pause();navigation=ButtonNavigation();dirty=true;
+ }
  if(connectPending){connectPending=false;WiFi.disconnect(false,false);WiFi.begin(savedSsid.c_str(),savedPassword.c_str());lastRetry=millis();}
  xSemaphoreTake(cloudLock,portMAX_DELAY);uint32_t revision=photoRevision;String state=photoState;xSemaphoreGive(cloudLock);
  if(revision!=shownPhotoRevision){shownPhotoRevision=revision;if(showPhotoProgress){if(state=="rendered")showPhotoProgress=false;dirty=true;}}
  int status=WiFi.status();if(status!=previousStatus){previousStatus=status;if(helpVisible)dirty=true;}
  if(savedSsid.length()&&status!=WL_CONNECTED&&millis()-lastRetry>30000){WiFi.reconnect();lastRetry=millis();}
  CloudMessage *message=nullptr;
- if(xQueueReceive(cloudInbox,&message,0)==pdTRUE){
+ if(visibility.canReceiveAnswer()&&xQueueReceive(cloudInbox,&message,0)==pdTRUE){
   xSemaphoreTake(cloudLock,portMAX_DELAY);bool current=message->generation==cloudGeneration;xSemaphoreGive(cloudLock);
   if(current&&acceptText(message->text,"2"))activeDelivery=message->id;
   delete message;
  }
- switch(navigation.update(digitalRead(BOOT_KEY)==LOW,millis())){
+ if(visibility.hidden())navigation=ButtonNavigation();
+ else switch(navigation.update(digitalRead(BOOT_KEY)==LOW,millis())){
   case NavEvent::Info:helpVisible=true;dirty=true;break;
   case NavEvent::Next:if(helpVisible)helpVisible=false;else currentPage=(currentPage+1)%pageCount();dirty=true;break;
   case NavEvent::Previous:if(helpVisible)helpVisible=false;else currentPage=(currentPage+pageCount()-1)%pageCount();dirty=true;break;
   default:break;
  }
- if(rotation.due(millis(),!helpVisible&&!showPhotoProgress&&panel->healthy&&!lines.empty(),pageCount(),dirty||navigation.waiting())){
+ if(rotation.due(millis(),!visibility.hidden()&&!helpVisible&&!showPhotoProgress&&panel->healthy&&!lines.empty(),pageCount(),dirty||navigation.waiting()||powerButton.waiting())){
   currentPage=(currentPage+1)%pageCount();dirty=true;
  }
- if(dirty&&!navigation.waiting()&&millis()-lastPaint>=3000)paint();
+ if(panel->healthy&&visibility.frame(dirty)!=ScreenFrame::None&&!navigation.waiting()&&!powerButton.waiting()&&millis()-lastPaint>=3000)paint();
  delay(2);
 }

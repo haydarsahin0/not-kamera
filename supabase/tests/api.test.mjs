@@ -11,7 +11,7 @@ function setup({incomplete=false,answer='Aufgabe 1)\n2 + 2 = 4'}={}){
   if(url.includes('not_kamera_device')){const q=new URL(url).searchParams;if(q.has('delivery_id')&&q.get('delivery_id')!=='eq.'+device.delivery_id)return Response.json([]);if(opts.method==='PATCH')Object.assign(device,JSON.parse(opts.body));return Response.json([device]);}
   if(url.includes('not_kamera_jobs')&&opts.method==='PATCH'){Object.assign(jobs[0],JSON.parse(opts.body));return Response.json(jobs);}
   if(url.includes('not_kamera_jobs'))return Response.json(jobs);
-  if(url.endsWith('/responses')){const p=JSON.parse(opts.body);assert.equal(p.model,'gpt-6.1-sol');assert.equal(p.store,false);assert.match(p.instructions,/Aufgabe 1\)/);assert.match(p.input[0].content[0].text,/Statistik/);return Response.json({status:incomplete?'incomplete':'completed',output:[{type:'message',content:[{type:'output_text',text:answer}]}]});}
+  if(url.endsWith('/responses')){const p=JSON.parse(opts.body);assert.equal(p.model,'gpt-6.1-sol');assert.equal(p.store,false);assert.match(p.instructions,/Aufgabe 1\)/);assert.match(p.instructions,/so kurz wie möglich und so ausführlich wie nötig/);assert.match(p.instructions,/Erkläre die Bedeutung des Ergebnisses nur, wenn gefragt oder fachlich nötig/);assert.match(p.instructions,/Jede Teilaufgabe erhält ihre eigene vollständige/);assert.match(p.input[0].content[0].text,/Statistik/);return Response.json({status:incomplete?'incomplete':'completed',output:[{type:'message',content:[{type:'output_text',text:answer}]}]});}
   throw Error('Unexpected '+url);
  };
  const env=name=>({SUPABASE_URL:'https://project.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'private-service',NOT_KAMERA_OPENAI_API_KEY:'private-openai'})[name];

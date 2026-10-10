@@ -1,6 +1,22 @@
-# Not Ekran V2 — 0.6.0
+# Not Ekran V2 — 0.7.0
 
-## 0.6.0 ekran düzeltmeleri
+## 0.7.0: PWR ile ekranı kapat/aç, 18 px yazı
+
+- **PWR kısa basış:** ekran beyaza temizlenir, sonra ekranın güç hattı kapatılır. Yeniden kısa basışta metin ve okuma sayfası RAM'den korunarak çizilir. E-paper güç kesilince son görüntüyü tuttuğundan yalnız güç hattını kesmek yeterli değildir.
+- Bu işlem cihazı tümüyle kapatmaz: Wi-Fi, ağ işlemleri ve RAM açık kalır. Pili çıkarınca veya cihazı yeniden başlatınca bu okuma konumu korunmaz. Güç tasarrufu/süre garantisi verilmez.
+- Ekran kapalıyken otomatik sayfa geçişi ve BOOT gezinmesi durur. Açılıp fiziksel yenileme tamamlandıktan sonra 30 saniyelik süre yeniden başlar. BOOT'un açık ekrandaki tek/çift/uzun basışları aynı kalır. Web arayüzünde de ekran aç/kapat düğmesi vardır; gizliyken web ileri/geri istekleri 409 verir.
+- Varsayılan cevap fontu **18 px kalın Unicode** oldu; manuel 16 px seçeneği kalır. Her boyutta 1478 glif, Almanca/Türkçe/Yunanca ve yaygın matematik karakterleri korunur. 18 px fontta 6 satır/sayfa, daha çok karakter/satır vardır.
+- Yeni bulut cevabı kapalı ekranı açmaz. Kuyrukta bekler; ekran açıldığında önce korunan sayfa çizilir, ardından yeni cevap normal biçimde alınır. Beyaz ekran yeni cevap teslimatı olarak onaylanmaz.
+- PWR GPIO18, ekran güç GPIO6 ve batarya tutma GPIO17 üreticinin sabit V2 `07_BATT_PWR_Test/main/user_config.h` ve `board_power_bsp.cpp` örneklerine göre kullanılır. Açılış için zaten basılı PWR tuşunun bırakılması ilk ekranı kapatmaz; 35 ms debounce ve tek bırakış olayı kullanılır.
+- Supabase cevap yönergesi kısaltıldı: yalnızca sorulan kapsam, operatöre göre yeterli uzunluk, doğal öğrenci dili, gereksiz giriş/tekrar/yorum olmadan. Hesap adımları ve istenen açıklamalar korunur. Yönerge fotoğraf özeti anahtarına dahildir, eski uzun cevap önbelleği yeni sorularda kullanılmaz.
+- Unicode raster/taşma, ekran görünürlüğü/PWR debounce/30 sn duraklama/kuyruk sırası, yerel fotoğraf akışı ve Supabase API testleri ile gerçek firmware derlemesi kontrol edilir. Fiziksel PWR/panel testi USB yüklemesi sonrası kullanıcı cihazında yapılmalıdır.
+
+```sh
+g++ -std=c++17 -Wall -Wextra -Werror firmware/tools/test_screen_visibility.cpp -o /tmp/test-screen
+/tmp/test-screen
+```
+
+## Önceki 0.6.0 ekran düzeltmeleri
 
 - Bulut cevapları 8 px yerine varsayılan **20 px kalın DejaVu Sans Unicode** fontla gösterilir. Manuel metin için 16 px seçeneği de vardır. Büyük boyutta 6 satır/sayfa; satırlar piksel genişliğine göre bölünür, UTF-8 karakter ortasından kesilmez ve cevap kısaltılmaz.
 - Türkçe/Almanca harfler, Yunan harfleri, matematik/aralık/para/ok işaretleri doğrudan çizilir. 1478 Unicode karakterin 16/20 px bitmapleri firmware'e dahildir. `?` üreten ASCII dönüşümü cevap akışından kaldırıldı. Nadir kapsam dışı karakterler kaybolmaz: örneğin emoji `[U+1F642]` olarak belirtilir. Kaynak cevapta zaten bulunan `?` değişmez; geçmişte kaybolmuş bilgi geri üretilemez.
@@ -19,7 +35,7 @@ Aşağıdaki fotoğraf aktarım yolu 0.5.0 ile aynıdır.
 
 ## Tek iPhone, yalnızca cihaz sayfası
 
-1. USB ile 0.6.0 yazılımını yükle. Silme seçeneğini kapalı bırak: Wi-Fi ve uygulama eşleştirmesi NVS’den korunur.
+1. USB ile 0.7.0 yazılımını yükle. Silme seçeneğini kapalı bırak: Wi-Fi ve uygulama eşleştirmesi NVS’den korunur.
 2. NotEkran ağına bağlanıp `http://192.168.4.1/camera` aç. Yerel kullanıcı `admin`; şifre cihazın bağlantı ekranındaki koddur. Önceki eşleştirme otomatik okunur. OpenAI anahtarı girilmez veya cihaz tarafından indirilmez; yalnızca Supabase fonksiyonu bu anahtarı kullanır.
 3. Fotoğrafı çek/seç. Sayfa JPEG’e küçültüp CSRF korumalı multipart POST ile **yerel cihaza** yükler. Hiçbir tarayıcı isteği buluta gitmez.
 4. “Fotoğraf cihaz tarafından alındı” mesajından sonra NotEkran ağından çıkıp iPhone kişisel erişim noktasını aç. Cihaz önceden kaydedilen ağa tekrar bağlanır, saati NTP ile doğrular, TLS üzerinden fotoğrafı Supabase’e gönderir.
@@ -47,7 +63,7 @@ Pages yayınlandıktan sonra: https://haydarsahin0.github.io/not-kamera/install/
 4. Ekrandaki NotEkran-XXXX ağına, yine ekrandaki şifreyle bağlan.
 5. Safari: **http://192.168.4.1**. Kullanıcı `admin`, şifre ekrandaki kod.
 6. Merhaba gönder. Birkaç saniye sonra ekranın değiştiğini doğrula.
-7. BOOT tek basış: sonraki; çift basış: önceki sayfa; uzun (3 saniye): bağlantı bilgileri. PWR yeniden atanmadı.
+7. BOOT tek basış: sonraki; çift basış: önceki sayfa; uzun (3 saniye): bağlantı bilgileri. PWR kısa basış ekranı kapatır/açar; metin ve sayfa korunur.
 
 Cihazın kendi Wi-Fi ağı internetsizdir ve açık kalır. Başka bir ağa bağlamak için
 cihazın sayfasında ağ adını/şifresini gir. Sadece 2,4 GHz kişisel şifreli ağlar;
@@ -62,7 +78,7 @@ iPhone'un kendi hotspot istemcisine erişimi donanımda ayrıca test edilecek.
 - POST formlarında rastgele CSRF kodu. Dış servis/CDN yok; kontrol sayfası cihazda.
 - HTTP yerel ağda şifresiz taşınır. Port yönlendirmesiyle internete açma.
 - En çok 65536 UTF-8 bayt; sözcük kaydırma, iki yazı boyutu, önceki/sonraki sayfa.
-- Cevaplar 16/20 px Unicode fontla çizilir; desteklenmeyen nadir karakterler açık `[U+XXXX]` koduyla gösterilir.
+- Cevaplar 16/18 px Unicode fontla çizilir; desteklenmeyen nadir karakterler açık `[U+XXXX]` koduyla gösterilir.
 - E-paper tam yenileme; değişiklikler en az 3 saniye aralıklı. Yenilemede kısa süreli
   siyah/beyaz geçiş normal. Yenileme sırasında HTTP isteği birkaç saniye bekleyebilir.
 - Ekran BUSY sinyaline 10 saniye sınır; hata olursa ekran işlemleri durur, web hata gösterir.
@@ -86,6 +102,7 @@ V2 ESP-IDF FactoryProgram ve Arduino örnekleri ile eşleştirildi:
 | Ses güç (kapalı yüksek) | 42 |
 | Batarya güç tutma (yüksek) | 17 |
 | BOOT | 0 |
+| PWR (ekran kapat/aç) | 18 |
 
 `prepare_driver.py` üreticinin ekran sürücüsünü sabit revizyondan indirir.
 Bellek ayırma 5000 bayt normal RAM'e çevrilir; BUSY beklemesine zaman sınırı eklenir.

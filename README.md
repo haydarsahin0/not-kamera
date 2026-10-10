@@ -1,5 +1,7 @@
 # Not Kamera
 
+**0.7.0:** PWR kısa basış ekranı beyaza kapatır, tekrar basış aynı okuma sayfasına döner. Ekran kapalıyken otomatik sayfa geçişi durur; Wi-Fi/RAM açık kalır. Varsayılan cevap fontu 18 px. Supabase yönergesi yalnız sorulanı, gerekli adımları koruyarak kısa ve doğal öğrenci diliyle yanıtlar. Yeni fiziksel PWR/panel testi kullanıcı yüklemesi sonrası yapılır; USB güncellemesinde erase seçilmez.
+
 **0.6.0 ekran güncellemesi:** Büyük 20 px kalın Unicode yazı, Almanca/Türkçe harfler ve matematik simgeleri, 30 saniyede otomatik sayfa geçişi. Butonlar aynı; elle geçiş okuma süresini sıfırlar. Son sayfadan başa döner. Yeni firmware derlendi ve ekran/timer testleri geçti; yeni sürümün fiziksel cihaz testi bekliyor.
 
 **0.5.0 cihaz akışı:** [Yükleyici](https://haydarsahin0.github.io/not-kamera/install/) üzerinden firmware güncelle; cihazın `http://192.168.4.1/camera` sayfasından fotoğrafı yükle. Tek iPhone ile yükleme onayından sonra NotEkran ağından çıkıp kişisel erişim noktasını aç. Cihaz OpenAI işlemini Supabase üzerinden sürdürüp cevabın tamamını ekrana yazar; ana fotoğraf sitesi gerekmez. Güncellemede silme seçeneğini kapalı bırak. Bu fotoğraf → analiz → ekran akışı kullanıcı tarafından fiziksel cihazda doğrulandı. [Yerel kullanım ayrıntıları](firmware/README.md).

@@ -13,6 +13,7 @@ async function refresh(){
  try{const state=await device('/api/photo/status');paired=state.paired;busy=state.busy||uploading;
  $('settings').open=!paired;$('connection').textContent=(paired?'Eşleştirme kayıtlı. ':'Eşleştirme gerekli. ')+(state.wifi?'Wi-Fi bağlı. ':'İnternet Wi-Fi bağlantısı bekleniyor. ')+'Bulut: '+state.cloud;
  if(state.healthy===false){$('screenStatus').textContent='Ekran sürücüsü hata bildirdi; aktarım tamamlandı sayılmadı.';notice('Ekran yanıt vermiyor. Cihazı ve V2 sürümünü kontrol et.',true);}
+ else if(state.screen_hidden){$('screenStatus').textContent='Ekran kapalı. PWR tuşuna kısa basınca kaldığın sayfa açılır; yeni cevap varsa açıldıktan sonra ekrana alınır.';notice(state.busy?'Fotoğraf işlemi sürüyor; cevabı göstermek için PWR ile ekranı aç.':'Ekran kapalı; okuma sayfası korunuyor.');}
  else if(state.state==='rendered'){$('screenStatus').textContent='Cevap ekranda: '+state.pages+' sayfa. Tek basış ileri, çift basış geri.';notice('Cevap cihaz ekranına geldi.');}
  else if(state.state==='error')notice(state.detail,true);
  else if(state.busy){$('screenStatus').textContent=state.detail;notice('Fotoğraf cihazda. Tek iPhone kullanıyorsan NotEkran ağından çık, kişisel erişim noktasını aç ve cihazı açık bırak. Cevap otomatik ekrana gelir.');}

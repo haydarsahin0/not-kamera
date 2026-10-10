@@ -18,6 +18,6 @@ assert merged[0x10000:end]==app
 out.mkdir(parents=True,exist_ok=True)
 blob=merged[:end]
 (out/'not-ekran-v2.bin').write_bytes(blob)
-meta={'version':'0.6.0','board':'Waveshare ESP32-S3-ePaper-1.54 V2','arduino_esp32':'3.3.0','gfx':'1.12.1','bytes':len(blob),'sha256':hashlib.sha256(blob).hexdigest(),'hardware_tested':False}
+meta={'version':'0.7.0','board':'Waveshare ESP32-S3-ePaper-1.54 V2','arduino_esp32':'3.3.0','gfx':'1.12.1','bytes':len(blob),'sha256':hashlib.sha256(blob).hexdigest(),'hardware_tested':False}
 (out/'build-info.json').write_text(json.dumps(meta,indent=2)+'\n')
 print(json.dumps(meta,indent=2))

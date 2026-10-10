@@ -5,7 +5,7 @@
 #include "unicode_font_data.h"
 
 namespace NoteText {
-inline const NoteFont::Font &font(int size) { return size==1?NoteFont::font16:NoteFont::font20; }
+inline const NoteFont::Font &font(int size) { return size==1?NoteFont::font16:NoteFont::font18; }
 inline const NoteFont::Glyph *glyph(const NoteFont::Font &f,uint32_t cp) {
  size_t lo=0,hi=f.count;
  while(lo<hi){size_t mid=(lo+hi)/2;if(f.glyphs[mid].code<cp)lo=mid+1;else hi=mid;}
@@ -45,7 +45,7 @@ inline std::string normalize(const std::string &s) {
  }
  std::string out;
  for(auto cp:points){
-  if(cp=='\n'||glyph(NoteFont::font20,cp))out+=encode(cp);
+  if(cp=='\n'||glyph(NoteFont::font18,cp))out+=encode(cp);
   else {char b[20];snprintf(b,sizeof(b),"[U+%04lX]",(unsigned long)cp);out+=b;}
  }
  return out;
