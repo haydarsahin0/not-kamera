@@ -31,6 +31,8 @@ int previousStatus=-1;
 uint32_t textRevision=0, renderedRevision=0;
 String activeDelivery;
 ButtonNavigation navigation;
+PhotoRequest *uploadPhoto=nullptr;String uploadError;bool uploadReserved=false;
+uint32_t shownPhotoRevision=0;bool showPhotoProgress=false;
 
 String randomCode(){char b[17];snprintf(b,sizeof(b),"%08lx%08lx",(unsigned long)esp_random(),(unsigned long)esp_random());return String(b);}
 String htmlEscape(String s){s.replace("&","&amp;");s.replace("<","&lt;");s.replace(">","&gt;");s.replace("\"","&quot;");s.replace("'","&#39;");return s;}
@@ -50,13 +52,13 @@ String formStart(const char* action){return String("<form method='post' action='
 void root(){
  if(!authorized())return;
  String h=R"HTML(<!doctype html><html lang="tr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Not Ekran</title><style>
- body{font:17px system-ui;background:#f0f4f8;color:#173044;max-width:620px;margin:auto;padding:22px}h1{margin-bottom:6px}section{background:white;border-radius:18px;padding:20px;margin:18px 0}label{display:block;margin:12px 0}input,textarea,select,button{font:inherit;box-sizing:border-box;width:100%;padding:12px;border:1px solid #b9cbd6;border-radius:9px}textarea{min-height:170px}button{background:#185ed2;color:white;border:0;margin:8px 0;cursor:pointer}small{display:block;line-height:1.5;color:#526b7c}.buttons{display:flex;gap:8px}.buttons form{flex:1}code{overflow-wrap:anywhere}a{color:#185ed2}</style><h1>Not Ekran</h1><small>V2 · 0.4.1 · Metin ve fotoğraf</small><section><strong>Bağlantı</strong><p>)HTML";
+ body{font:17px system-ui;background:#f0f4f8;color:#173044;max-width:620px;margin:auto;padding:22px}h1{margin-bottom:6px}section{background:white;border-radius:18px;padding:20px;margin:18px 0}label{display:block;margin:12px 0}input,textarea,select,button{font:inherit;box-sizing:border-box;width:100%;padding:12px;border:1px solid #b9cbd6;border-radius:9px}textarea{min-height:170px}button{background:#185ed2;color:white;border:0;margin:8px 0;cursor:pointer}small{display:block;line-height:1.5;color:#526b7c}.buttons{display:flex;gap:8px}.buttons form{flex:1}code{overflow-wrap:anywhere}a{color:#185ed2}</style><h1>Not Ekran</h1><small>V2 · 0.5.0 · Metin ve fotoğraf</small><section><strong>Bağlantı</strong><p>)HTML";
  h+=WiFi.status()==WL_CONNECTED?"Wi-Fi bağlı. Yerel adres: <code>http://"+WiFi.localIP().toString()+"</code>":"Wi-Fi bağlı değil. Cihazın kendi ağı üzerinden kullanabilirsin.";
  if(!panel->healthy)h+="<p><strong>Ekran yanıt vermedi. Kurulumu durdur; V2 kartı ve bağlantıyı kontrol et.</strong></p>";
  h+="</p><small>Kurulum ağı: "+htmlEscape(apName)+" · http://192.168.4.1<br>Sayfa "+String(currentPage+1)+" / "+String(pageCount());
  if(receivedAt)h+=" · Son metin "+String((millis()-receivedAt)/1000)+" saniye önce alındı";
  h+="<br>Bulut: "+htmlEscape(cloudGetError());
- h+="</small></section><section><h2>Fotoğraftan açıklama</h2><p><a href='/camera'>Fotoğraf çek ve cevabı ekrana gönder →</a></p><small>OpenAI bağlantısı için ayrı HTTPS sunucu gerekir. API anahtarı cihazına yazılmaz.</small></section><section><h2>Metin gönder</h2>"+formStart("/text");
+ h+="</small></section><section><h2>Fotoğraftan açıklama</h2><p><a href='/camera'>Fotoğraf çek ve cevabı ekrana gönder →</a></p><small>Fotoğrafı bu cihaz sayfasından yükle. Cihaz internet geldiğinde gönderir ve cevabı ekranda gösterir. OpenAI anahtarı Supabase’de kalır.</small></section><section><h2>Metin gönder</h2>"+formStart("/text");
  h+=R"HTML(<label>Metin<textarea name="text" maxlength="65536" required placeholder="Merhaba"></textarea></label><label>Yazı boyutu<select name="size"><option value="2">Büyük</option><option value="1">Küçük</option></select></label><button>Metni ekrana gönder</button><small>En fazla 65536 UTF-8 bayt. Uzun metin sayfalara ayrılır. İlk sürümde Türkçe harfler sadeleştirilir: ş → s, ı → i. Metin sayfalara ayrılır; hiçbir bölüm kısaltılmaz. Yeniden başlatılınca son bulut cevabı tekrar alınır.</small></form><div class="buttons">)HTML";
  h+=formStart("/previous")+"<button>Önceki</button></form>"+formStart("/next")+"<button>Sonraki</button></form></div>";
  h+=formStart("/help")+"<button>Bağlantı bilgilerini göster</button></form>"+formStart("/read")+"<button>Metne dön</button></form>"+formStart("/clear")+"<button>Ekrandaki metni sil</button></form></section>";
@@ -68,13 +70,21 @@ void root(){
 }
 void paint(){
  panel->EPD_Clear();canvas.setTextColor(0);canvas.setTextWrap(false);canvas.setTextSize(1);canvas.setCursor(4,3);
- if(helpVisible){
+ if(showPhotoProgress){
+  canvas.println("FOTOGRAF / NOT EKRAN");
+  xSemaphoreTake(cloudLock,portMAX_DELAY);String detail=photoDetail;xSemaphoreGive(cloudLock);
+  auto progress=wrapText(normalizeText(std::string(detail.c_str())),32);
+  for(size_t n=0;n<progress.size()&&n<9;++n){canvas.setCursor(4,25+n*10);canvas.println(progress[n].c_str());}
+  canvas.setCursor(4,135);canvas.println("Telefon: NotEkran agindan cik");
+  canvas.setCursor(4,147);canvas.println("Kisisel erisim noktasini ac");
+  canvas.setCursor(4,165);canvas.println("Cihaz acik kalsin");
+ }else if(helpVisible){
   canvas.println("NOT EKRAN / V2");canvas.setCursor(4,23);canvas.println("Wi-Fi agi:");canvas.setCursor(4,35);canvas.println(apName);
   canvas.setCursor(4,55);canvas.println("Ag sifresi / giris kodu:");canvas.setCursor(4,67);canvas.println(devicePassword);
   canvas.setCursor(4,87);canvas.println("Kullanici: admin");canvas.setCursor(4,105);canvas.println("http://192.168.4.1");
   canvas.setCursor(4,125);canvas.println(WiFi.status()==WL_CONNECTED?"Diger agda adres:":"Diger ag: bagli degil");
   canvas.setCursor(4,137);if(WiFi.status()==WL_CONNECTED)canvas.println(WiFi.localIP().toString());
-  canvas.setCursor(4,160);canvas.println("iPad: agi sec, Safari ac");canvas.setCursor(4,178);canvas.println("BOOT: metne don");
+  canvas.setCursor(4,160);canvas.println("Telefon: agi sec, Safari ac");canvas.setCursor(4,178);canvas.println("BOOT: metne don");
  } else {
   canvas.print("NOT ");canvas.print(currentPage+1);canvas.print("/");canvas.print(pageCount());canvas.print("  ");canvas.print(WiFi.status()==WL_CONNECTED?"WiFi":"Yerel AP");
   canvas.drawFastHLine(4,15,192,0);canvas.setTextSize(fontSize);
@@ -83,13 +93,13 @@ void paint(){
   canvas.setTextSize(1);canvas.setCursor(4,188);canvas.print("1: ileri  2: geri  Tut: bilgi");
  }
  if(panel->healthy){panel->EPD_Init();if(panel->healthy)panel->EPD_Display();}
- if(panel->healthy){renderedRevision=textRevision;if(activeDelivery.length()&&!helpVisible)cloudRendered(activeDelivery,pageCount());}
+ if(panel->healthy){renderedRevision=textRevision;if(activeDelivery.length()&&!helpVisible){cloudRendered(activeDelivery,pageCount());photoRendered();}}
  dirty=false;lastPaint=millis();
 }
 bool acceptText(const String &t,const String &size){
  if(t.length()==0||t.length()>65536||(size!="1"&&size!="2"))return false;
  fontSize=size.toInt();lines=wrapText(normalizeText(std::string(t.c_str())),fontSize==2?16:32);
- activeDelivery="";currentPage=0;helpVisible=false;dirty=true;receivedAt=millis();++textRevision;return true;
+ activeDelivery="";showPhotoProgress=false;currentPage=0;helpVisible=false;dirty=true;receivedAt=millis();++textRevision;return true;
 }
 void setup(){
  pinMode(BATTERY_HOLD,OUTPUT);digitalWrite(BATTERY_HOLD,HIGH);
@@ -100,7 +110,7 @@ void setup(){
  custom_lcd_spi_t pins={11,10,9,8,13,12,SPI2_HOST,5000};
  panel=new epaper_driver_display(200,200,pins);
  prefs.begin("not-ekran",false);
- cloudLock=xSemaphoreCreateMutex();cloudInbox=xQueueCreate(1,sizeof(CloudMessage*));
+ cloudLock=xSemaphoreCreateMutex();cloudInbox=xQueueCreate(1,sizeof(CloudMessage*));photoInbox=xQueueCreate(1,sizeof(PhotoRequest*));
  cloudSetToken(prefs.getString("cloud-token",""));
  devicePassword=prefs.getString("code","");if(devicePassword.length()!=16){devicePassword=randomCode();prefs.putString("code",devicePassword);}
  csrf=randomCode();savedSsid=prefs.getString("ssid","");savedPassword=prefs.getString("wifi-pass","");
@@ -108,14 +118,15 @@ void setup(){
  WiFi.mode(WIFI_AP_STA);WiFi.setAutoReconnect(true);WiFi.softAP(apName.c_str(),devicePassword.c_str());
  if(savedSsid.length())WiFi.begin(savedSsid.c_str(),savedPassword.c_str());
  configTime(0,0,"pool.ntp.org","time.google.com");
- xTaskCreate(cloudWorker,"cloud",12288,nullptr,1,nullptr);
+ xTaskCreate(cloudWorker,"cloud",24576,nullptr,1,nullptr);
+ const char* requestHeaders[]={"X-CSRF","X-Study-Profile"};server.collectHeaders(requestHeaders,2);
  server.on("/",HTTP_GET,root);
  server.on("/api/cloud",HTTP_POST,[]{
   if(!mutationAllowed())return;
   String token=server.arg("token");
   if(!token.isEmpty()&&!validCloudToken(token)){server.send(400,"application/json","{\"detail\":\"Erisim kodu gecersiz.\"}");return;}
   prefs.putString("cloud-token",token);cloudSetToken(token);
-  server.send(200,"application/json","{\"saved\":true,\"version\":\"0.4.1\"}");
+  server.send(200,"application/json","{\"saved\":true,\"version\":\"0.5.0\"}");
  });
  server.on("/camera",HTTP_GET,[]{
   if(!authorized())return;
@@ -123,6 +134,58 @@ void setup(){
   server.sendHeader("Cache-Control","no-store");server.sendHeader("X-Frame-Options","DENY");
   server.send(200,"text/html; charset=utf-8",h);
  });
+
+ server.on("/api/photo/status",HTTP_GET,[]{
+  if(!authorized())return;
+  cJSON* doc=cJSON_CreateObject();
+  xSemaphoreTake(cloudLock,portMAX_DELAY);
+  cJSON_AddBoolToObject(doc,"paired",cloudToken.length()>0);cJSON_AddBoolToObject(doc,"busy",photoBusy);
+  cJSON_AddStringToObject(doc,"state",photoState.c_str());cJSON_AddStringToObject(doc,"detail",photoDetail.c_str());
+  cJSON_AddStringToObject(doc,"cloud",cloudError.c_str());cJSON_AddStringToObject(doc,"job",photoJob.c_str());
+  xSemaphoreGive(cloudLock);
+  cJSON_AddBoolToObject(doc,"wifi",WiFi.status()==WL_CONNECTED);cJSON_AddBoolToObject(doc,"clock",time(nullptr)>=1767225600);
+  cJSON_AddNumberToObject(doc,"pages",pageCount());cJSON_AddBoolToObject(doc,"healthy",panel->healthy);
+  char* json=cJSON_PrintUnformatted(doc);server.sendHeader("Cache-Control","no-store");server.send(200,"application/json",json);cJSON_free(json);cJSON_Delete(doc);
+ });
+ server.on("/api/photo",HTTP_POST,[]{
+  if(!authorized())return;
+  if(server.header("X-CSRF")!=csrf){server.send(403,"application/json","{\"detail\":\"Sayfayi yenile.\"}");return;}
+  if(!uploadReserved||uploadError.length()||!uploadPhoto||!uploadPhoto->image.jpeg()){
+   String message=uploadError.length()?uploadError:"Fotograf eksik veya JPEG degil.";
+   if(uploadPhoto){free(uploadPhoto->image.data);delete uploadPhoto;uploadPhoto=nullptr;}
+   if(uploadReserved){photoFinish("error",message);uploadReserved=false;}
+   cJSON* doc=cJSON_CreateObject();cJSON_AddStringToObject(doc,"detail",message.c_str());char* json=cJSON_PrintUnformatted(doc);server.send(400,"application/json",json);cJSON_free(json);cJSON_Delete(doc);return;
+  }
+  if(xQueueSend(photoInbox,&uploadPhoto,0)!=pdTRUE){free(uploadPhoto->image.data);delete uploadPhoto;uploadPhoto=nullptr;uploadReserved=false;photoFinish("error","Fotograf kuyrugu dolu");server.send(409,"application/json","{\"detail\":\"Fotograf kuyrugu dolu.\"}");return;}
+  uploadPhoto=nullptr;uploadReserved=false;activeDelivery="";photoUpdate("waiting","Fotograf cihazda; internet bekleniyor");showPhotoProgress=true;helpVisible=false;dirty=true;
+  server.send(202,"application/json","{\"queued\":true}");
+ },[]{
+  HTTPUpload& u=server.upload();
+  if(u.status==UPLOAD_FILE_START){
+   if(uploadReserved){uploadError="Tek seferde yalnizca bir fotograf gonder";return;}
+   // All local headers are parsed before file bytes; no unauthorized allocation.
+   if(uploadPhoto){free(uploadPhoto->image.data);delete uploadPhoto;uploadPhoto=nullptr;}
+   uploadError="";uploadReserved=false;
+   if(!server.authenticate("admin",devicePassword.c_str())||server.header("X-CSRF")!=csrf){uploadError="Giris veya oturum gecersiz";return;}
+   xSemaphoreTake(cloudLock,portMAX_DELAY);
+   if(!panel->healthy)uploadError="Ekran surucusu hata bildirdi";
+   else if(photoBusy)uploadError="Once bekleyen fotografin tamamlanmasini bekle";
+   else if(cloudToken.isEmpty())uploadError="Once cihazi eslestir";
+   else {photoBusy=true;photoJob="";++cloudGeneration;uploadReserved=true;}
+   xSemaphoreGive(cloudLock);
+   if(!uploadReserved)return;
+   if(u.name!="photo"||u.type!="image/jpeg"||server.header("X-Study-Profile").length()>7000){uploadError="JPEG veya ders profili gecersiz";return;}
+   uploadPhoto=new PhotoRequest();uploadPhoto->profile=server.header("X-Study-Profile");
+   uploadPhoto->image.data=(uint8_t*)ps_malloc(MAX_PHOTO_BYTES);uploadPhoto->image.capacity=MAX_PHOTO_BYTES;
+   if(!uploadPhoto->image.data)uploadError="Fotograf icin bellek yetersiz";
+  }else if(u.status==UPLOAD_FILE_WRITE){
+   if(uploadPhoto&&uploadError.isEmpty()&&!uploadPhoto->image.append(u.buf,u.currentSize))uploadError="Fotograf 4 MB sinirini asti";
+  }else if(u.status==UPLOAD_FILE_ABORTED){
+   if(uploadPhoto){free(uploadPhoto->image.data);delete uploadPhoto;uploadPhoto=nullptr;}
+   if(uploadReserved)photoFinish("error","Fotograf aktarimi kesildi");uploadReserved=false;uploadError="Fotograf aktarimi kesildi";
+  }
+ });
+
  server.on("/api/screen",HTTP_GET,[]{
   if(!authorized())return;
   server.sendHeader("Cache-Control","no-store");
@@ -156,11 +219,14 @@ void setup(){
 void loop(){
  server.handleClient();
  if(connectPending){connectPending=false;WiFi.disconnect(false,false);WiFi.begin(savedSsid.c_str(),savedPassword.c_str());lastRetry=millis();}
+ xSemaphoreTake(cloudLock,portMAX_DELAY);uint32_t revision=photoRevision;String state=photoState;xSemaphoreGive(cloudLock);
+ if(revision!=shownPhotoRevision){shownPhotoRevision=revision;if(showPhotoProgress){if(state=="rendered")showPhotoProgress=false;dirty=true;}}
  int status=WiFi.status();if(status!=previousStatus){previousStatus=status;if(helpVisible)dirty=true;}
  if(savedSsid.length()&&status!=WL_CONNECTED&&millis()-lastRetry>30000){WiFi.reconnect();lastRetry=millis();}
  CloudMessage *message=nullptr;
  if(xQueueReceive(cloudInbox,&message,0)==pdTRUE){
-  if(acceptText(message->text,"1"))activeDelivery=message->id;
+  xSemaphoreTake(cloudLock,portMAX_DELAY);bool current=message->generation==cloudGeneration;xSemaphoreGive(cloudLock);
+  if(current&&acceptText(message->text,"1"))activeDelivery=message->id;
   delete message;
  }
  switch(navigation.update(digitalRead(BOOT_KEY)==LOW,millis())){

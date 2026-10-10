@@ -1,4 +1,19 @@
-# Not Ekran V2 — 0.4.1
+# Not Ekran V2 — 0.5.0
+
+## Tek iPhone, yalnızca cihaz sayfası
+
+1. USB ile 0.5.0 yazılımını yükle. Silme seçeneğini kapalı bırak: Wi-Fi ve uygulama eşleştirmesi NVS’den korunur.
+2. NotEkran ağına bağlanıp `http://192.168.4.1/camera` aç. Yerel kullanıcı `admin`; şifre cihazın bağlantı ekranındaki koddur. Önceki eşleştirme otomatik okunur. OpenAI anahtarı girilmez veya cihaz tarafından indirilmez; yalnızca Supabase fonksiyonu bu anahtarı kullanır.
+3. Fotoğrafı çek/seç. Sayfa JPEG’e küçültüp CSRF korumalı multipart POST ile **yerel cihaza** yükler. Hiçbir tarayıcı isteği buluta gitmez.
+4. “Fotoğraf cihaz tarafından alındı” mesajından sonra NotEkran ağından çıkıp iPhone kişisel erişim noktasını aç. Cihaz önceden kaydedilen ağa tekrar bağlanır, saati NTP ile doğrular, TLS üzerinden fotoğrafı Supabase’e gönderir.
+5. Cihaz kendi işinin sonucunu takip eder; tüm cevabı sayfalara ayırıp e-paper ekrana yazar. Sayfayı kapatmak işlemi durdurmaz. BOOT tek basış ileri, çift basış geri.
+
+Aynı iPhone kendi erişim noktasını sunarken NotEkran ağına bağlanamaz. Bu yüzden tek telefonla ağ değişimi gerekir; `192.168.4.1` internet adresi değildir. Cihaz başka bir internetli Wi-Fi ağına bağlıysa yerel sayfa ve işlem aynı anda kullanılabilir. Yerel LAN adresi de aynı arayüzü açar; iPhone erişim noktası üzerinden client IP erişimi fiziksel olarak doğrulanmadı.
+
+Fotoğraf en fazla 4 MB, PSRAM’de tek işlem olarak tutulur. Güç kesilirse henüz gönderilmeyen fotoğraf kaybolur. Tamamlanan fotoğraf buffer’ı serbest bırakılır. İkinci fotoğraf önceki işlem bitmeden reddedilir. Oversize, eksik aktarım, yanlış CSRF, geçersiz JPEG ve bellek yetersizliği açık hata verir. 0.5.0’da yerel sayfa `/api/photo/status` ile eşleştirme, Wi-Fi, saat, bulut hata metni ve fiziksel ekran durumunu gösterir. Uygulama token’ı tarayıcıya geri verilmez. Cevap yalnızca gerçek e-paper yenilemesi başarıyla bitince “rendered” durumuna geçer. Eski bulut yanıtı yeni fotoğraf işlemini geçersiz kılamaz; iletiler işlem nesliyle kontrol edilir.
+
+Doğrulama: V2 firmware derlendi; offline eşleştirme, yalnızca yerel multipart yükleme, çift gönderim önleme, ekran durumu ve buffer sınırları test edildi. Önceki 0.1.0 metin aktarımı kullanıcı cihazında çalıştı; gerçek OpenAI analizi sunucuda geçti. **0.5.0 fotoğraf → fiziksel cihaz akışı kullanıcı donanımında henüz doğrulanmadı.**
+
 
 **0.1.0 metin gönderimi kullanıcı tarafından fiziksel cihazda doğrulandı. Yeni 0.4.1 fotoğraf köprüsünün gerçek iPhone/API testi bekliyor.**
 

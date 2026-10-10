@@ -1,9 +1,9 @@
 {
-  "version": "0.4.1",
+  "version": "0.5.0",
   "board": "Waveshare ESP32-S3-ePaper-1.54 V2",
   "arduino_esp32": "3.3.0",
   "gfx": "1.12.1",
-  "bytes": 1231392,
-  "sha256": "de3cddeac38bcc1aef9b4d8f913bde26883713c0072f165cd1b6c80502bee26a",
+  "bytes": 1257568,
+  "sha256": "ba59b41a1956cdc3e2ec6594b330f2ea6efdd4233d721e5e5e1984507eb7ad80",
   "hardware_tested": false
 }

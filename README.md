@@ -1,5 +1,8 @@
 # Not Kamera
 
+**Yeni 0.5.0 cihaz akışı:** [Yükleyici](https://haydarsahin0.github.io/not-kamera/install/) üzerinden firmware güncelle; cihazın `http://192.168.4.1/camera` sayfasından fotoğrafı yükle. Tek iPhone ile yükleme onayından sonra NotEkran ağından çıkıp kişisel erişim noktasını aç. Cihaz OpenAI işlemini Supabase üzerinden sürdürüp cevabın tamamını ekrana yazar; ana fotoğraf sitesi gerekmez. Güncellemede silme seçeneğini kapalı bırak. Donanımda yeni akış henüz doğrulanmadı. [Yerel kullanım ayrıntıları](firmware/README.md).
+
+
 iPhone Safari için fotoğraf analizi ve sesli okuma arayüzü. GitHub Pages arayüzü + ayrı Python API sunucusu.
 
 ## Canlı kurulum — 0.4.1
