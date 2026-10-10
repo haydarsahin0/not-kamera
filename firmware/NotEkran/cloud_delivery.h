@@ -61,7 +61,7 @@ void cloudWorker(void*){
   }
   if(uxQueueMessagesWaiting(cloudInbox))continue;
   if(pendingJob.length()){
-   http.begin(tls,String(CLOUD_API)+"/api/jobs/"+pendingJob);http.addHeader("Authorization","Bearer "+token);
+   http.begin(tls,String(CLOUD_API)+"/api/jobs/"+pendingJob+"?format=not-ekran-answer-v1");http.addHeader("Authorization","Bearer "+token);
    int code=http.GET();
    if(code!=200){String error=networkError(http,code);http.end();cloudSetError(error);
     if(code==401||code==404){pendingJob="";photoFinish("error",error);}else photoUpdate("waiting",error);
@@ -81,7 +81,7 @@ void cloudWorker(void*){
    continue;
   }
   if(localBusy)continue; // uploading or awaiting physical render: do not fetch an older mailbox answer
-  http.begin(tls,String(CLOUD_API)+"/api/device/poll?after="+lastReceived);
+  http.begin(tls,String(CLOUD_API)+"/api/device/poll?format=not-ekran-answer-v1&after="+lastReceived);
   const char* names[]={"X-Delivery-Id","X-Text-Bytes","X-Text-Sha256"};http.collectHeaders(names,3);
   http.addHeader("Authorization","Bearer "+token);int code=http.GET();
   if(code==204){cloudSetError("Bulut bagli");http.end();continue;}

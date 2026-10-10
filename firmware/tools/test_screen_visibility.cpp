@@ -10,8 +10,8 @@ int main(){
  rotation.shown(1000);
  screen.toggle();rotation.pause();
  assert(screen.hidden());assert(!screen.canReceiveAnswer());
- assert(screen.frame(false)==ScreenFrame::Blank);
- screen.painted(ScreenFrame::Blank);
+ assert(screen.frame(false)==ScreenFrame::Standby);
+ screen.painted(ScreenFrame::Standby);
  // New web/status changes must not repaint hidden text, nor advance pages.
  assert(screen.frame(true)==ScreenFrame::None);
  assert(!rotation.due(120000,false,9,false));

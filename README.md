@@ -1,6 +1,6 @@
 # Not Kamera
 
-**0.7.0:** PWR kısa basış ekranı beyaza kapatır, tekrar basış aynı okuma sayfasına döner. Ekran kapalıyken otomatik sayfa geçişi durur; Wi-Fi/RAM açık kalır. Varsayılan cevap fontu 18 px. Supabase yönergesi yalnız sorulanı, gerekli adımları koruyarak kısa ve doğal öğrenci diliyle yanıtlar. Yeni fiziksel PWR/panel testi kullanıcı yüklemesi sonrası yapılır; USB güncellemesinde erase seçilmez.
+**0.8.0:** Grafik istenen sorularda gerçek siyah/beyaz grafik sayfaları hazırlanır: eksenler, 16 px Unicode etiketler, eğriler, denge noktaları ve oklar. Metin 18 px kalır. PWR ile okuma ekranı yerine sevimli bir pil göstergesi açılır; tekrar basınca aynı sayfaya dönülür. Pil yüzdesi V2 ADC voltaj ölçümünden yaklaşık hesaplanır, şarj durumu algılandığı iddia edilmez. 30 saniyelik geçiş ve BOOT işlevleri korunur. Güncellerken erase seçilmez. Yeni grafik/pil davranışının fiziksel cihaz testi yükleme sonrası yapılmalıdır.
 
 **0.6.0 ekran güncellemesi:** Büyük 20 px kalın Unicode yazı, Almanca/Türkçe harfler ve matematik simgeleri, 30 saniyede otomatik sayfa geçişi. Butonlar aynı; elle geçiş okuma süresini sıfırlar. Son sayfadan başa döner. Yeni firmware derlendi ve ekran/timer testleri geçti; yeni sürümün fiziksel cihaz testi bekliyor.
 

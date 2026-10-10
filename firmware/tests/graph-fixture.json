@@ -1,0 +1,296 @@
+{
+  "format": "not-ekran-answer-v1",
+  "sections": [
+    {
+      "task": "Aufgabe 1) a)",
+      "text": "Eine Erhöhung von G verschiebt die IS-Kurve nach rechts. Y und i steigen.",
+      "graphs": [
+        {
+          "title": "IS-LM: G steigt",
+          "x_label": "Y",
+          "y_label": "i",
+          "curves": [
+            {
+              "label": "IS₀",
+              "points": [
+                {
+                  "x": 0,
+                  "y": 90
+                },
+                {
+                  "x": 90,
+                  "y": 0
+                }
+              ],
+              "label_at": {
+                "x": 20,
+                "y": 70
+              },
+              "dashed": true
+            },
+            {
+              "label": "IS₁",
+              "points": [
+                {
+                  "x": 10,
+                  "y": 100
+                },
+                {
+                  "x": 100,
+                  "y": 10
+                }
+              ],
+              "label_at": {
+                "x": 80,
+                "y": 30
+              },
+              "dashed": false
+            },
+            {
+              "label": "LM",
+              "points": [
+                {
+                  "x": 0,
+                  "y": 10
+                },
+                {
+                  "x": 100,
+                  "y": 90
+                }
+              ],
+              "label_at": {
+                "x": 75,
+                "y": 70
+              },
+              "dashed": false
+            }
+          ],
+          "points": [
+            {
+              "label": "E₀",
+              "at": {
+                "x": 44.4444,
+                "y": 45.5556
+              }
+            },
+            {
+              "label": "E₁",
+              "at": {
+                "x": 55.5556,
+                "y": 54.4444
+              }
+            }
+          ],
+          "arrows": [
+            {
+              "from": {
+                "x": 25,
+                "y": 65
+              },
+              "to": {
+                "x": 35,
+                "y": 75
+              }
+            }
+          ],
+          "x_ticks": [],
+          "y_ticks": []
+        }
+      ]
+    },
+    {
+      "task": "Aufgabe 2)",
+      "text": "Ein negativer Angebotsschock erhöht P und senkt Y.",
+      "graphs": [
+        {
+          "title": "AD-AS: Angebot sinkt",
+          "x_label": "Y",
+          "y_label": "P",
+          "curves": [
+            {
+              "label": "AD",
+              "points": [
+                {
+                  "x": 0,
+                  "y": 95
+                },
+                {
+                  "x": 100,
+                  "y": 15
+                }
+              ],
+              "label_at": {
+                "x": 85,
+                "y": 27
+              },
+              "dashed": false
+            },
+            {
+              "label": "AS₀",
+              "points": [
+                {
+                  "x": 0,
+                  "y": 10
+                },
+                {
+                  "x": 100,
+                  "y": 90
+                }
+              ],
+              "label_at": {
+                "x": 80,
+                "y": 74
+              },
+              "dashed": true
+            },
+            {
+              "label": "AS₁",
+              "points": [
+                {
+                  "x": 0,
+                  "y": 30
+                },
+                {
+                  "x": 87.5,
+                  "y": 100
+                }
+              ],
+              "label_at": {
+                "x": 20,
+                "y": 46
+              },
+              "dashed": false
+            }
+          ],
+          "points": [
+            {
+              "label": "E₀",
+              "at": {
+                "x": 53.125,
+                "y": 52.5
+              }
+            },
+            {
+              "label": "E₁",
+              "at": {
+                "x": 40.625,
+                "y": 62.5
+              }
+            }
+          ],
+          "arrows": [],
+          "x_ticks": [],
+          "y_ticks": []
+        }
+      ]
+    },
+    {
+      "task": "Aufgabe 3)",
+      "text": "Die Nachfragekurve verschiebt sich nach links.",
+      "graphs": [
+        {
+          "title": "Nachfrage sinkt",
+          "x_label": "Q",
+          "y_label": "P",
+          "curves": [
+            {
+              "label": "D₀",
+              "points": [
+                {
+                  "x": 0,
+                  "y": 100
+                },
+                {
+                  "x": 100,
+                  "y": 0
+                }
+              ],
+              "label_at": {
+                "x": 85,
+                "y": 15
+              },
+              "dashed": true
+            },
+            {
+              "label": "D₁",
+              "points": [
+                {
+                  "x": 0,
+                  "y": 70
+                },
+                {
+                  "x": 70,
+                  "y": 0
+                }
+              ],
+              "label_at": {
+                "x": 10,
+                "y": 60
+              },
+              "dashed": false
+            },
+            {
+              "label": "S",
+              "points": [
+                {
+                  "x": 0,
+                  "y": 0
+                },
+                {
+                  "x": 100,
+                  "y": 100
+                }
+              ],
+              "label_at": {
+                "x": 80,
+                "y": 80
+              },
+              "dashed": false
+            }
+          ],
+          "points": [
+            {
+              "label": "E₀",
+              "at": {
+                "x": 50,
+                "y": 50
+              }
+            },
+            {
+              "label": "E₁",
+              "at": {
+                "x": 35,
+                "y": 35
+              }
+            }
+          ],
+          "arrows": [],
+          "x_ticks": [
+            {
+              "label": "0",
+              "value": 0
+            },
+            {
+              "label": "10",
+              "value": 100
+            }
+          ],
+          "y_ticks": [
+            {
+              "label": "0",
+              "value": 0
+            },
+            {
+              "label": "5",
+              "value": 50
+            },
+            {
+              "label": "10",
+              "value": 100
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -12,3 +12,8 @@ Kaynak index.ts tek dosyadır; JS uyumlu sözdizimi Node 24 testlerinde kullanı
 
 
 0.4.0: not_kamera_device tablosu seçili job, teslimat UUID'si, son cihaz kontrolü ve ekran onayını tutar. RLS ve service_role yetkisi diğer çalışma tablolarıyla aynıdır. /api/device/poll düz metin ve SHA-256 döndürür; /api/device/ack yalnızca güncel teslimatı onaylar. /api/device/select önceki cevabı yeniden gönderir. Tüm uçlar aynı özel bearer doğrulamasını kullanır. Ekran onayı yalnızca cihaz firmware'inin sağlıklı ekran yenilemesinden sonra gönderilir; sunucu bu onayı donanımdan bağımsız olarak doğrulayamaz. Anahtar fiziksel cihaz NVS'sinde tutulur, derlenmiş firmware'e gömülmez.
+
+
+## 0.8.0 grafik belgeleri
+
+`index.ts`, `answer.ts`, `font-metrics.ts` birlikte deploy edilir. Üç dosya da sır içermeyen uygulama kaynaklarıdır; OpenAI anahtarı mevcut Supabase secret olarak kalır. Responses strict JSON Schema, grafik geometrisi/etiket sınırları, görev sırası ve 64 KiB belge sınırı doğrulanır. Yeni cihaz `format=not-ekran-answer-v1` ile çizim belgesi alır; eski cihaz/siteye düz metin korunur. Fotoğraf cache anahtarı yeni şema ve grafik yönergesini kapsar. Auth/RLS/veritabanı şeması değişmez. Model `gpt-6.1-sol` korunur.

@@ -1,21 +1,22 @@
 #pragma once
 #include <stdint.h>
 
-enum class ScreenFrame { None, Blank, Content };
-// E-paper retains its image without power. A hide must physically refresh white
-// before the display rail can be disabled. Reading state remains in RAM.
+enum class ScreenFrame { None, Standby, Content };
+// E-paper retains its image without power. Paint the battery standby picture
+// before disabling its rail. Reading state remains in RAM.
 class ScreenVisibility {
  bool hidden_=false,blankPending_=false,restorePending_=false;
  public:
  bool hidden() const {return hidden_;}
  bool canReceiveAnswer() const {return !hidden_&&!restorePending_;}
  void toggle(){hidden_=!hidden_;blankPending_=hidden_;restorePending_=!hidden_;}
+ void refreshStandby(){if(hidden_)blankPending_=true;}
  ScreenFrame frame(bool dirty) const {
-  if(hidden_)return blankPending_?ScreenFrame::Blank:ScreenFrame::None;
+  if(hidden_)return blankPending_?ScreenFrame::Standby:ScreenFrame::None;
   return dirty||restorePending_?ScreenFrame::Content:ScreenFrame::None;
  }
  void painted(ScreenFrame frame){
-  if(frame==ScreenFrame::Blank)blankPending_=false;
+  if(frame==ScreenFrame::Standby)blankPending_=false;
   if(frame==ScreenFrame::Content)restorePending_=false;
  }
 };
