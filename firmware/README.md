@@ -1,8 +1,25 @@
-# Not Ekran V2 — 0.5.0
+# Not Ekran V2 — 0.6.0
+
+## 0.6.0 ekran düzeltmeleri
+
+- Bulut cevapları 8 px yerine varsayılan **20 px kalın DejaVu Sans Unicode** fontla gösterilir. Manuel metin için 16 px seçeneği de vardır. Büyük boyutta 6 satır/sayfa; satırlar piksel genişliğine göre bölünür, UTF-8 karakter ortasından kesilmez ve cevap kısaltılmaz.
+- Türkçe/Almanca harfler, Yunan harfleri, matematik/aralık/para/ok işaretleri doğrudan çizilir. 1478 Unicode karakterin 16/20 px bitmapleri firmware'e dahildir. `?` üreten ASCII dönüşümü cevap akışından kaldırıldı. Nadir kapsam dışı karakterler kaybolmaz: örneğin emoji `[U+1F642]` olarak belirtilir. Kaynak cevapta zaten bulunan `?` değişmez; geçmişte kaybolmuş bilgi geri üretilemez.
+- Çok sayfalı cevap 30 saniyede otomatik ilerler; son sayfadan ilk sayfaya döner. Süre fiziksel yenileme tamamlanınca başlar. Manuel ileri/geri geçişten sonra yeni sayfa 30 saniye kalır. Bilgi/fotoğraf işlem ekranında, tuşa basarken ve ekran hatasında otomatik geçiş olmaz. Tek sayfa gereksiz yenilenmez. BOOT tek/çift/uzun basış davranışı korunur.
+- Wi-Fi, cihaz şifresi ve eşleştirme aynı NVS alanlarında kalır. Güncellemede erase seçilmemelidir. Sunucu/API değiştirilmedi.
+- `firmware/tools/test_display.cpp`: gerçek rasterizer ile tüm font karakterlerinin çizim sınırları, Türkçe/Almanca/matematik, birleşik aksan, hatalı UTF-8, 64 KiB metin, 30 saniye/sıfırlama/duraklama/millis taşması testleri. Yeni sürüm derlendi; fiziksel cihazda yeni font/timer testi henüz yapılmadı. Önceki fotoğraf → cevap → ekran akışı kullanıcı tarafından doğrulandı.
+
+Font lisansı: `firmware/FONT-LICENSE.txt`. Yeniden üretmek için Pillow/fontTools ile `python firmware/tools/prepare_font.py --font /path/to/DejaVuSans-Bold.ttf`; derleme checked-in header'ı kullanır.
+
+```sh
+g++ -std=c++17 -Wall -Wextra firmware/tools/test_display.cpp -o /tmp/test-display
+/tmp/test-display
+```
+
+Aşağıdaki fotoğraf aktarım yolu 0.5.0 ile aynıdır.
 
 ## Tek iPhone, yalnızca cihaz sayfası
 
-1. USB ile 0.5.0 yazılımını yükle. Silme seçeneğini kapalı bırak: Wi-Fi ve uygulama eşleştirmesi NVS’den korunur.
+1. USB ile 0.6.0 yazılımını yükle. Silme seçeneğini kapalı bırak: Wi-Fi ve uygulama eşleştirmesi NVS’den korunur.
 2. NotEkran ağına bağlanıp `http://192.168.4.1/camera` aç. Yerel kullanıcı `admin`; şifre cihazın bağlantı ekranındaki koddur. Önceki eşleştirme otomatik okunur. OpenAI anahtarı girilmez veya cihaz tarafından indirilmez; yalnızca Supabase fonksiyonu bu anahtarı kullanır.
 3. Fotoğrafı çek/seç. Sayfa JPEG’e küçültüp CSRF korumalı multipart POST ile **yerel cihaza** yükler. Hiçbir tarayıcı isteği buluta gitmez.
 4. “Fotoğraf cihaz tarafından alındı” mesajından sonra NotEkran ağından çıkıp iPhone kişisel erişim noktasını aç. Cihaz önceden kaydedilen ağa tekrar bağlanır, saati NTP ile doğrular, TLS üzerinden fotoğrafı Supabase’e gönderir.
@@ -45,7 +62,7 @@ iPhone'un kendi hotspot istemcisine erişimi donanımda ayrıca test edilecek.
 - POST formlarında rastgele CSRF kodu. Dış servis/CDN yok; kontrol sayfası cihazda.
 - HTTP yerel ağda şifresiz taşınır. Port yönlendirmesiyle internete açma.
 - En çok 65536 UTF-8 bayt; sözcük kaydırma, iki yazı boyutu, önceki/sonraki sayfa.
-- ASCII font: Türkçe/Almanca harfler sadeleşir; diğer Unicode simgeler `?` olabilir.
+- Cevaplar 16/20 px Unicode fontla çizilir; desteklenmeyen nadir karakterler açık `[U+XXXX]` koduyla gösterilir.
 - E-paper tam yenileme; değişiklikler en az 3 saniye aralıklı. Yenilemede kısa süreli
   siyah/beyaz geçiş normal. Yenileme sırasında HTTP isteği birkaç saniye bekleyebilir.
 - Ekran BUSY sinyaline 10 saniye sınır; hata olursa ekran işlemleri durur, web hata gösterir.

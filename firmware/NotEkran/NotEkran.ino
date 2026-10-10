@@ -6,6 +6,8 @@
 #include <esp_system.h>
 #include "epaper_driver_bsp.h"
 #include "text_layout.h"
+#include "unicode_text.h"
+#include "page_rotation.h"
 #include "camera_page.h"
 #include "cloud_delivery.h"
 #include "button_navigation.h"
@@ -31,12 +33,13 @@ int previousStatus=-1;
 uint32_t textRevision=0, renderedRevision=0;
 String activeDelivery;
 ButtonNavigation navigation;
+PageRotation rotation;
 PhotoRequest *uploadPhoto=nullptr;String uploadError;bool uploadReserved=false;
 uint32_t shownPhotoRevision=0;bool showPhotoProgress=false;
 
 String randomCode(){char b[17];snprintf(b,sizeof(b),"%08lx%08lx",(unsigned long)esp_random(),(unsigned long)esp_random());return String(b);}
 String htmlEscape(String s){s.replace("&","&amp;");s.replace("<","&lt;");s.replace(">","&gt;");s.replace("\"","&quot;");s.replace("'","&#39;");return s;}
-size_t rowsPerPage(){return fontSize==2?9:18;}
+size_t rowsPerPage(){return 160/NoteText::font(fontSize).lineHeight;}
 size_t pageCount(){return max((size_t)1,(lines.size()+rowsPerPage()-1)/rowsPerPage());}
 bool authorized(){
  if(server.authenticate("admin",devicePassword.c_str()))return true;
@@ -52,14 +55,14 @@ String formStart(const char* action){return String("<form method='post' action='
 void root(){
  if(!authorized())return;
  String h=R"HTML(<!doctype html><html lang="tr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Not Ekran</title><style>
- body{font:17px system-ui;background:#f0f4f8;color:#173044;max-width:620px;margin:auto;padding:22px}h1{margin-bottom:6px}section{background:white;border-radius:18px;padding:20px;margin:18px 0}label{display:block;margin:12px 0}input,textarea,select,button{font:inherit;box-sizing:border-box;width:100%;padding:12px;border:1px solid #b9cbd6;border-radius:9px}textarea{min-height:170px}button{background:#185ed2;color:white;border:0;margin:8px 0;cursor:pointer}small{display:block;line-height:1.5;color:#526b7c}.buttons{display:flex;gap:8px}.buttons form{flex:1}code{overflow-wrap:anywhere}a{color:#185ed2}</style><h1>Not Ekran</h1><small>V2 · 0.5.0 · Metin ve fotoğraf</small><section><strong>Bağlantı</strong><p>)HTML";
+ body{font:17px system-ui;background:#f0f4f8;color:#173044;max-width:620px;margin:auto;padding:22px}h1{margin-bottom:6px}section{background:white;border-radius:18px;padding:20px;margin:18px 0}label{display:block;margin:12px 0}input,textarea,select,button{font:inherit;box-sizing:border-box;width:100%;padding:12px;border:1px solid #b9cbd6;border-radius:9px}textarea{min-height:170px}button{background:#185ed2;color:white;border:0;margin:8px 0;cursor:pointer}small{display:block;line-height:1.5;color:#526b7c}.buttons{display:flex;gap:8px}.buttons form{flex:1}code{overflow-wrap:anywhere}a{color:#185ed2}</style><h1>Not Ekran</h1><small>V2 · 0.6.0 · Metin ve fotoğraf</small><section><strong>Bağlantı</strong><p>)HTML";
  h+=WiFi.status()==WL_CONNECTED?"Wi-Fi bağlı. Yerel adres: <code>http://"+WiFi.localIP().toString()+"</code>":"Wi-Fi bağlı değil. Cihazın kendi ağı üzerinden kullanabilirsin.";
  if(!panel->healthy)h+="<p><strong>Ekran yanıt vermedi. Kurulumu durdur; V2 kartı ve bağlantıyı kontrol et.</strong></p>";
  h+="</p><small>Kurulum ağı: "+htmlEscape(apName)+" · http://192.168.4.1<br>Sayfa "+String(currentPage+1)+" / "+String(pageCount());
  if(receivedAt)h+=" · Son metin "+String((millis()-receivedAt)/1000)+" saniye önce alındı";
  h+="<br>Bulut: "+htmlEscape(cloudGetError());
  h+="</small></section><section><h2>Fotoğraftan açıklama</h2><p><a href='/camera'>Fotoğraf çek ve cevabı ekrana gönder →</a></p><small>Fotoğrafı bu cihaz sayfasından yükle. Cihaz internet geldiğinde gönderir ve cevabı ekranda gösterir. OpenAI anahtarı Supabase’de kalır.</small></section><section><h2>Metin gönder</h2>"+formStart("/text");
- h+=R"HTML(<label>Metin<textarea name="text" maxlength="65536" required placeholder="Merhaba"></textarea></label><label>Yazı boyutu<select name="size"><option value="2">Büyük</option><option value="1">Küçük</option></select></label><button>Metni ekrana gönder</button><small>En fazla 65536 UTF-8 bayt. Uzun metin sayfalara ayrılır. İlk sürümde Türkçe harfler sadeleştirilir: ş → s, ı → i. Metin sayfalara ayrılır; hiçbir bölüm kısaltılmaz. Yeniden başlatılınca son bulut cevabı tekrar alınır.</small></form><div class="buttons">)HTML";
+ h+=R"HTML(<label>Metin<textarea name="text" maxlength="65536" required placeholder="Merhaba"></textarea></label><label>Yazı boyutu<select name="size"><option value="2">Büyük · 20 px</option><option value="1">Orta · 16 px</option></select></label><button>Metni ekrana gönder</button><small>En fazla 65536 UTF-8 bayt. Uzun metin sayfalara ayrılır. Türkçe/Almanca harfler ve yaygın matematik simgeleri korunur. Nadir desteklenmeyen karakterler ? yerine [U+XXXX] koduyla belirtilir. Sayfalar 30 saniyede otomatik ilerler; son sayfadan ilk sayfaya döner. Butonla geçişte süre yeniden başlar. Metin sayfalara ayrılır; hiçbir bölüm kısaltılmaz. Yeniden başlatılınca son bulut cevabı tekrar alınır.</small></form><div class="buttons">)HTML";
  h+=formStart("/previous")+"<button>Önceki</button></form>"+formStart("/next")+"<button>Sonraki</button></form></div>";
  h+=formStart("/help")+"<button>Bağlantı bilgilerini göster</button></form>"+formStart("/read")+"<button>Metne dön</button></form>"+formStart("/clear")+"<button>Ekrandaki metni sil</button></form></section>";
  h+="<section><h2>Wi-Fi ayarı</h2>"+formStart("/wifi");
@@ -87,18 +90,21 @@ void paint(){
   canvas.setCursor(4,160);canvas.println("Telefon: agi sec, Safari ac");canvas.setCursor(4,178);canvas.println("BOOT: metne don");
  } else {
   canvas.print("NOT ");canvas.print(currentPage+1);canvas.print("/");canvas.print(pageCount());canvas.print("  ");canvas.print(WiFi.status()==WL_CONNECTED?"WiFi":"Yerel AP");
-  canvas.drawFastHLine(4,15,192,0);canvas.setTextSize(fontSize);
+  canvas.drawFastHLine(4,15,192,0);
+  const auto &bodyFont=NoteText::font(fontSize);
   size_t start=currentPage*rowsPerPage();
-  for(size_t n=0;n<rowsPerPage()&&start+n<lines.size();++n){canvas.setCursor(4,21+n*8*fontSize);canvas.print(lines[start+n].c_str());}
-  canvas.setTextSize(1);canvas.setCursor(4,188);canvas.print("1: ileri  2: geri  Tut: bilgi");
+  for(size_t n=0;n<rowsPerPage()&&start+n<lines.size();++n){NoteText::draw(canvas,lines[start+n],4,21+bodyFont.ascent+n*bodyFont.lineHeight,bodyFont);}
+  canvas.setTextSize(1);canvas.setCursor(4,188);canvas.print("30sn oto / 1:ileri 2:geri");
  }
  if(panel->healthy){panel->EPD_Init();if(panel->healthy)panel->EPD_Display();}
  if(panel->healthy){renderedRevision=textRevision;if(activeDelivery.length()&&!helpVisible){cloudRendered(activeDelivery,pageCount());photoRendered();}}
  dirty=false;lastPaint=millis();
+ if(panel->healthy&&!helpVisible&&!showPhotoProgress&&!lines.empty())rotation.shown(lastPaint);else rotation.pause();
 }
 bool acceptText(const String &t,const String &size){
  if(t.length()==0||t.length()>65536||(size!="1"&&size!="2"))return false;
- fontSize=size.toInt();lines=wrapText(normalizeText(std::string(t.c_str())),fontSize==2?16:32);
+ fontSize=size.toInt();lines=NoteText::wrap(NoteText::normalize(std::string(t.c_str())),192,NoteText::font(fontSize));
+ rotation.pause();
  activeDelivery="";showPhotoProgress=false;currentPage=0;helpVisible=false;dirty=true;receivedAt=millis();++textRevision;return true;
 }
 void setup(){
@@ -126,7 +132,7 @@ void setup(){
   String token=server.arg("token");
   if(!token.isEmpty()&&!validCloudToken(token)){server.send(400,"application/json","{\"detail\":\"Erisim kodu gecersiz.\"}");return;}
   prefs.putString("cloud-token",token);cloudSetToken(token);
-  server.send(200,"application/json","{\"saved\":true,\"version\":\"0.5.0\"}");
+  server.send(200,"application/json","{\"saved\":true,\"version\":\"0.6.0\"}");
  });
  server.on("/camera",HTTP_GET,[]{
   if(!authorized())return;
@@ -226,7 +232,7 @@ void loop(){
  CloudMessage *message=nullptr;
  if(xQueueReceive(cloudInbox,&message,0)==pdTRUE){
   xSemaphoreTake(cloudLock,portMAX_DELAY);bool current=message->generation==cloudGeneration;xSemaphoreGive(cloudLock);
-  if(current&&acceptText(message->text,"1"))activeDelivery=message->id;
+  if(current&&acceptText(message->text,"2"))activeDelivery=message->id;
   delete message;
  }
  switch(navigation.update(digitalRead(BOOT_KEY)==LOW,millis())){
@@ -234,6 +240,9 @@ void loop(){
   case NavEvent::Next:if(helpVisible)helpVisible=false;else currentPage=(currentPage+1)%pageCount();dirty=true;break;
   case NavEvent::Previous:if(helpVisible)helpVisible=false;else currentPage=(currentPage+pageCount()-1)%pageCount();dirty=true;break;
   default:break;
+ }
+ if(rotation.due(millis(),!helpVisible&&!showPhotoProgress&&panel->healthy&&!lines.empty(),pageCount(),dirty||navigation.waiting())){
+  currentPage=(currentPage+1)%pageCount();dirty=true;
  }
  if(dirty&&!navigation.waiting()&&millis()-lastPaint>=3000)paint();
  delay(2);

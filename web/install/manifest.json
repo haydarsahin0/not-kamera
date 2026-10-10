@@ -1,7 +1,7 @@
 {
   "name": "Not Ekran V2",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "new_install_prompt_erase": true,
   "new_install_improv_wait_time": 0,
-  "builds": [{"chipFamily": "ESP32-S3", "improv": false, "parts": [{"path": "not-ekran-v2.bin", "offset": 0}]}]
+  "builds": [{"chipFamily": "ESP32-S3", "improv": false, "parts": [{"path": "not-ekran-v2.bin?v=0.6.0", "offset": 0}]}]
 }

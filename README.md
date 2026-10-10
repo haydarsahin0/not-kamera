@@ -1,6 +1,8 @@
 # Not Kamera
 
-**Yeni 0.5.0 cihaz akışı:** [Yükleyici](https://haydarsahin0.github.io/not-kamera/install/) üzerinden firmware güncelle; cihazın `http://192.168.4.1/camera` sayfasından fotoğrafı yükle. Tek iPhone ile yükleme onayından sonra NotEkran ağından çıkıp kişisel erişim noktasını aç. Cihaz OpenAI işlemini Supabase üzerinden sürdürüp cevabın tamamını ekrana yazar; ana fotoğraf sitesi gerekmez. Güncellemede silme seçeneğini kapalı bırak. Donanımda yeni akış henüz doğrulanmadı. [Yerel kullanım ayrıntıları](firmware/README.md).
+**0.6.0 ekran güncellemesi:** Büyük 20 px kalın Unicode yazı, Almanca/Türkçe harfler ve matematik simgeleri, 30 saniyede otomatik sayfa geçişi. Butonlar aynı; elle geçiş okuma süresini sıfırlar. Son sayfadan başa döner. Yeni firmware derlendi ve ekran/timer testleri geçti; yeni sürümün fiziksel cihaz testi bekliyor.
+
+**0.5.0 cihaz akışı:** [Yükleyici](https://haydarsahin0.github.io/not-kamera/install/) üzerinden firmware güncelle; cihazın `http://192.168.4.1/camera` sayfasından fotoğrafı yükle. Tek iPhone ile yükleme onayından sonra NotEkran ağından çıkıp kişisel erişim noktasını aç. Cihaz OpenAI işlemini Supabase üzerinden sürdürüp cevabın tamamını ekrana yazar; ana fotoğraf sitesi gerekmez. Güncellemede silme seçeneğini kapalı bırak. Bu fotoğraf → analiz → ekran akışı kullanıcı tarafından fiziksel cihazda doğrulandı. [Yerel kullanım ayrıntıları](firmware/README.md).
 
 
 iPhone Safari için fotoğraf analizi ve sesli okuma arayüzü. GitHub Pages arayüzü + ayrı Python API sunucusu.
