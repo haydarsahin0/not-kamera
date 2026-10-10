@@ -6,6 +6,7 @@
 #include <esp_system.h>
 #include "epaper_driver_bsp.h"
 #include "text_layout.h"
+#include "camera_page.h"
 
 // Waveshare ESP32-S3-ePaper-1.54 V2 only. GPIOs from vendor V2 examples.
 constexpr int EPD_POWER=6, AUDIO_POWER=42, BATTERY_HOLD=17, BOOT_KEY=0;
@@ -25,6 +26,7 @@ int fontSize=2;
 bool helpVisible=true, dirty=true, connectPending=false;
 uint32_t lastPaint=0, receivedAt=0, lastRetry=0;
 int previousStatus=-1;
+uint32_t textRevision=0, renderedRevision=0;
 
 String randomCode(){char b[17];snprintf(b,sizeof(b),"%08lx%08lx",(unsigned long)esp_random(),(unsigned long)esp_random());return String(b);}
 String htmlEscape(String s){s.replace("&","&amp;");s.replace("<","&lt;");s.replace(">","&gt;");s.replace("\"","&quot;");s.replace("'","&#39;");return s;}
@@ -44,12 +46,12 @@ String formStart(const char* action){return String("<form method='post' action='
 void root(){
  if(!authorized())return;
  String h=R"HTML(<!doctype html><html lang="tr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Not Ekran</title><style>
- body{font:17px system-ui;background:#f0f4f8;color:#173044;max-width:620px;margin:auto;padding:22px}h1{margin-bottom:6px}section{background:white;border-radius:18px;padding:20px;margin:18px 0}label{display:block;margin:12px 0}input,textarea,select,button{font:inherit;box-sizing:border-box;width:100%;padding:12px;border:1px solid #b9cbd6;border-radius:9px}textarea{min-height:170px}button{background:#185ed2;color:white;border:0;margin:8px 0;cursor:pointer}small{display:block;line-height:1.5;color:#526b7c}.buttons{display:flex;gap:8px}.buttons form{flex:1}code{overflow-wrap:anywhere}a{color:#185ed2}</style><h1>Not Ekran</h1><small>V2 · İlk donanım denemesi · Yerel metin ekranı</small><section><strong>Bağlantı</strong><p>)HTML";
+ body{font:17px system-ui;background:#f0f4f8;color:#173044;max-width:620px;margin:auto;padding:22px}h1{margin-bottom:6px}section{background:white;border-radius:18px;padding:20px;margin:18px 0}label{display:block;margin:12px 0}input,textarea,select,button{font:inherit;box-sizing:border-box;width:100%;padding:12px;border:1px solid #b9cbd6;border-radius:9px}textarea{min-height:170px}button{background:#185ed2;color:white;border:0;margin:8px 0;cursor:pointer}small{display:block;line-height:1.5;color:#526b7c}.buttons{display:flex;gap:8px}.buttons form{flex:1}code{overflow-wrap:anywhere}a{color:#185ed2}</style><h1>Not Ekran</h1><small>V2 · 0.2.0 · Metin ve fotoğraf</small><section><strong>Bağlantı</strong><p>)HTML";
  h+=WiFi.status()==WL_CONNECTED?"Wi-Fi bağlı. Yerel adres: <code>http://"+WiFi.localIP().toString()+"</code>":"Wi-Fi bağlı değil. Cihazın kendi ağı üzerinden kullanabilirsin.";
  if(!panel->healthy)h+="<p><strong>Ekran yanıt vermedi. Kurulumu durdur; V2 kartı ve bağlantıyı kontrol et.</strong></p>";
  h+="</p><small>Kurulum ağı: "+htmlEscape(apName)+" · http://192.168.4.1<br>Sayfa "+String(currentPage+1)+" / "+String(pageCount());
  if(receivedAt)h+=" · Son metin "+String((millis()-receivedAt)/1000)+" saniye önce alındı";
- h+="</small></section><section><h2>Metin gönder</h2>"+formStart("/text");
+ h+="</small></section><section><h2>Fotoğraftan açıklama</h2><p><a href='/camera'>Fotoğraf çek ve cevabı ekrana gönder →</a></p><small>OpenAI bağlantısı için ayrı HTTPS sunucu gerekir. API anahtarı cihazına yazılmaz.</small></section><section><h2>Metin gönder</h2>"+formStart("/text");
  h+=R"HTML(<label>Metin<textarea name="text" maxlength="4000" required placeholder="Merhaba"></textarea></label><label>Yazı boyutu<select name="size"><option value="2">Büyük</option><option value="1">Küçük</option></select></label><button>Metni ekrana gönder</button><small>En fazla 6000 UTF-8 bayt. Uzun metin sayfalara ayrılır. İlk sürümde Türkçe harfler sadeleştirilir: ş → s, ı → i. Metin yeniden başlatılınca silinir.</small></form><div class="buttons">)HTML";
  h+=formStart("/previous")+"<button>Önceki</button></form>"+formStart("/next")+"<button>Sonraki</button></form></div>";
  h+=formStart("/help")+"<button>Bağlantı bilgilerini göster</button></form>"+formStart("/read")+"<button>Metne dön</button></form>"+formStart("/clear")+"<button>Ekrandaki metni sil</button></form></section>";
@@ -76,7 +78,13 @@ void paint(){
   canvas.setTextSize(1);canvas.setCursor(4,188);canvas.print("BOOT: sonraki / uzun: bilgi");
  }
  if(panel->healthy){panel->EPD_Init();if(panel->healthy)panel->EPD_Display();}
+ if(panel->healthy)renderedRevision=textRevision;
  dirty=false;lastPaint=millis();
+}
+bool acceptText(const String &t,const String &size){
+ if(t.length()==0||t.length()>6000||(size!="1"&&size!="2"))return false;
+ fontSize=size.toInt();lines=wrapText(normalizeText(std::string(t.c_str())),fontSize==2?16:32);
+ currentPage=0;helpVisible=false;dirty=true;receivedAt=millis();++textRevision;return true;
 }
 void setup(){
  pinMode(BATTERY_HOLD,OUTPUT);digitalWrite(BATTERY_HOLD,HIGH);
@@ -93,12 +101,28 @@ void setup(){
  WiFi.mode(WIFI_AP_STA);WiFi.setAutoReconnect(true);WiFi.softAP(apName.c_str(),devicePassword.c_str());
  if(savedSsid.length())WiFi.begin(savedSsid.c_str(),savedPassword.c_str());
  server.on("/",HTTP_GET,root);
+ server.on("/camera",HTTP_GET,[]{
+  if(!authorized())return;
+  String h=FPSTR(CAMERA_PAGE);h.replace("__CSRF__",csrf);
+  server.sendHeader("Cache-Control","no-store");server.sendHeader("X-Frame-Options","DENY");
+  server.send(200,"text/html; charset=utf-8",h);
+ });
+ server.on("/api/screen",HTTP_GET,[]{
+  if(!authorized())return;
+  server.sendHeader("Cache-Control","no-store");
+  server.send(200,"application/json",String("{\"revision\":")+textRevision+",\"rendered\":"+renderedRevision+",\"pages\":"+pageCount()+",\"healthy\":"+(panel->healthy?"true":"false")+"}");
+ });
+ server.on("/api/text",HTTP_POST,[]{
+  if(!mutationAllowed())return;
+  if(!panel->healthy){server.send(503,"application/json","{\"detail\":\"Ekran surucusu hata bildirdi.\"}");return;}
+  if(!acceptText(server.arg("text"),server.arg("size"))){server.send(400,"application/json","{\"detail\":\"Metin veya boyut gecersiz; en fazla 6000 UTF-8 bayt.\"}");return;}
+  server.sendHeader("Cache-Control","no-store");
+  server.send(202,"application/json",String("{\"accepted\":true,\"revision\":")+textRevision+"}");
+ });
  server.on("/text",HTTP_POST,[]{
   if(!mutationAllowed())return;
-  String t=server.arg("text"), size=server.arg("size");
-  if(t.length()==0||t.length()>6000||(size!="1"&&size!="2")){server.send(400,"text/plain; charset=utf-8","Metin bos veya cok uzun; boyutu kontrol et.");return;}
-  fontSize=size.toInt();lines=wrapText(normalizeText(std::string(t.c_str())),fontSize==2?16:32);
-  currentPage=0;helpVisible=false;dirty=true;receivedAt=millis();redirect();
+  if(!acceptText(server.arg("text"),server.arg("size"))){server.send(400,"text/plain; charset=utf-8","Metin veya boyut gecersiz; en fazla 6000 UTF-8 bayt.");return;}
+  redirect();
  });
  server.on("/wifi",HTTP_POST,[]{
   if(!mutationAllowed())return;String s=server.arg("ssid"),p=server.arg("password");
@@ -109,7 +133,7 @@ void setup(){
  server.on("/previous",HTTP_POST,[]{if(!mutationAllowed())return;currentPage=(currentPage+pageCount()-1)%pageCount();helpVisible=false;dirty=true;redirect();});
  server.on("/help",HTTP_POST,[]{if(!mutationAllowed())return;helpVisible=true;dirty=true;redirect();});
  server.on("/read",HTTP_POST,[]{if(!mutationAllowed())return;helpVisible=false;dirty=true;redirect();});
- server.on("/clear",HTTP_POST,[]{if(!mutationAllowed())return;lines.clear();currentPage=0;receivedAt=0;helpVisible=false;dirty=true;redirect();});
+ server.on("/clear",HTTP_POST,[]{if(!mutationAllowed())return;lines.clear();currentPage=0;receivedAt=0;++textRevision;helpVisible=false;dirty=true;redirect();});
  server.onNotFound([]{server.send(404,"text/plain","Not found");});
  server.begin();paint();
 }

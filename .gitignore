@@ -7,3 +7,4 @@ node_modules/
 firmware/build/
 firmware/NotEkran/epaper_driver_bsp.cpp
 firmware/NotEkran/epaper_driver_bsp.h
+firmware/NotEkran/camera_page.h

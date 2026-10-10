@@ -1,17 +1,16 @@
-# Not Ekran V2 — 0.1.0
+# Not Ekran V2 — 0.2.0
 
-**Derlenmiş ilk donanım denemesi. Fiziksel cihaz üzerinde henüz denenmedi.**
+**0.1.0 metin gönderimi kullanıcı tarafından fiziksel cihazda doğrulandı. Yeni 0.2.0 fotoğraf köprüsünün gerçek iPhone/API testi bekliyor.**
 
 Yalnızca Waveshare ESP32-S3-ePaper-1.54 V2 (8 MB flash / 8 MB PSRAM).
-V1, başka kart veya farklı panel için kullanılmaz. Kamera/Claude bağlantısı değil,
-yerel Wi-Fi ile telefondan ekrana metin gönderme testidir.
+V1, başka kart veya farklı panel için kullanılmaz. Telefon fotoğrafını HTTPS sunucuya gönderip OpenAI yanıtını ekrana aktaran yerel arayüz içerir.
 
 ## Kullanıcı kurulumu
 
 Pages yayınlandıktan sonra: https://haydarsahin0.github.io/not-kamera/install/
 
 1. Windows Chrome/Edge; USB veri kablosu. Kart üzerinde V2 işaretini kontrol et.
-2. Yükleyici mevcut fabrika uygulamasının yerine geçer. İlk kurulumda eski ayarları sil.
+2. Yükleyici mevcut fabrika uygulamasının yerine geçer. İlk kurulumda eski ayarları sil. 0.1.0 sürümünden güncellemede Wi-Fi ve cihaz şifresini korumak için “erase” seçme.
 3. Yükleme bitince BOOT'a basmadan USB'yi çıkar/tak.
 4. Ekrandaki NotEkran-XXXX ağına, yine ekrandaki şifreyle bağlan.
 5. Safari: **http://192.168.4.1**. Kullanıcı `admin`, şifre ekrandaki kod.
@@ -35,7 +34,7 @@ iPhone'un kendi hotspot istemcisine erişimi donanımda ayrıca test edilecek.
 - E-paper tam yenileme; değişiklikler en az 3 saniye aralıklı. Yenilemede kısa süreli
   siyah/beyaz geçiş normal. Yenileme sırasında HTTP isteği birkaç saniye bekleyebilir.
 - Ekran BUSY sinyaline 10 saniye sınır; hata olursa ekran işlemleri durur, web hata gösterir.
-- Pil yüzdesi/ölçümü, uyku, RTC, ses, kamera, Claude, OTA ve bulut takibi bu sürümde yok.
+- Pil yüzdesi/ölçümü, uyku, RTC, ses, yerleşik kamera, OTA ve cihazın kendi bulut takibi yok. Fotoğraf takibini telefondaki açık sayfa yapar.
 - Açılış ekranındaki kodu başkalarıyla paylaşma. Fiziksel erişimi olan kişi kodu görebilir.
 - Pil kasaya sığmıyorsa kapağı bastırma. İlk test USB ile yapılmalı.
 
@@ -88,7 +87,7 @@ g++ -std=c++17 -Wall -Wextra firmware/tools/test_layout.cpp -o /tmp/test-layout
 
 ESP32 Arduino 3.3.0 için gerçek derleme yapıldı; yalnızca sözdizimi kontrolü değildir.
 Metin testleri: Türkçe/Almanca dönüşümü, emoji, boş satırlar, uzun sözcük ve 6000 bayt.
-Fiziksel ekran, Wi-Fi/AP, BOOT, Safari ve pil güç devresi henüz bu yazılımla denenmedi.
+Yeni fotoğraf akışı fiziksel cihaz/Safari ve gerçek OpenAI çağrısı ile henüz denenmedi.
 Başarılı derleme, donanım çalışmasının garantisi değildir.
 
 Fabrika geri dönüşü: üretici reposundaki `03_Firmware/V2-FactoryProgram.bin` ve
