@@ -118,3 +118,13 @@ Bağlantı koparsa yeni analiz başlatmak yerine “Bekleyen cevabı kontrol et�
 Ekran aktarımı hata verirse “Cihaza yeniden gönder” kullanılabilir. Takibi durdurmak sunucuda başlamış API isteğini iptal etmez.
 
 Sunucu bir OpenAI Responses isteği yapar (`store:false`); görüntü RAM'de işlenir, yanıt SQLite'ta 24 saat tutulur. Sağlayıcının API veri işleme şartları geçerlidir. Gerçek OpenAI çağrısı ve yeni akışın fiziksel Safari testi yapılmadı; canlı HTTPS sunucu ve API kimlik bilgileri henüz sağlanmadı. Donanım ayrıntıları ve derleme: [firmware rehberi](firmware/README.md).
+
+## Ders profili ve Almanca cevaplar
+
+Hem Pages arayüzünde hem cihazın fotoğraf sayfasında ders ve bilinen cevap kuralları alanı vardır. Varsayılan Makroökonomie; başka ders yazılabilir, alan boşsa görevden anlaşılması istenir. Cevaplar her zaman Almanca, açık ve akademik öğrenci diliyle üretilir. Profil bu sekmenin sessionStorage alanında tutulur ve her fotoğraf isteğinde X-Study-Profile başlığıyla UTF-8 JSON'un base64 kodlaması olarak gönderilir. Ders en fazla 120, kurallar 1000 karakterdir. Sunucu CORS bu başlığa izin verir. Eski kamera istemcileri profil göndermiyorsa Makroökonomie varsayılır.
+
+Sorudaki operator, alt görev, verilen puan/kelime sınırı, hesap adımları, birim ve yorumlama dikkate alınması istenir. Gerçek sınav kuralları bilinmediğinde uydurulmaz; bu alana kullanıcı tarafından girilmelidir. Grafik isteyen görevde metin açıklaması çizimin yerini tutmaz. Bir 1,0 notu veya her cevabın doğruluğu garanti edilemez. Profil veya talimat değişirse aynı fotoğraf için eski sonuç tekrar kullanılmaz. Bu değişiklikler gerçek modelle henüz değerlendirilmedi.
+
+Profil arayüzü için Pages'i tekrar yayınla; cihaz sayfası için 0.2.1 firmware yükle. Backend de aynı revizyona güncellenmelidir.
+
+Cevaplar “Aufgabe 1)”, “Aufgabe 2)” başlıkları ve boş satırla ayrılır. Görseldeki numaralar ve alt maddeler korunur; numara yoksa kendi sıralaması olduğunu belirtir.

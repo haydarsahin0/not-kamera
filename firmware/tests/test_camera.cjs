@@ -2,7 +2,7 @@ const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/st
 const nodes=new Map();
 function node(id){if(!nodes.has(id))nodes.set(id,{value:'',disabled:false,hidden:false,textContent:'',classList:{toggle(){}},files:[]});return nodes.get(id)}
 const calls=[],storage=new Map();let failDisplay=false;
-const ctx={console,TextEncoder,URLSearchParams,AbortController,AbortSignal,DOMException,Blob,Date,
+const ctx={console,btoa:s=>Buffer.from(s,'binary').toString('base64'),TextEncoder,URLSearchParams,AbortController,AbortSignal,DOMException,Blob,Date,
  document:{getElementById:node,createElement:()=>({getContext:()=>({drawImage(){}}),toBlob:fn=>fn(new Blob(['jpeg'],{type:'image/jpeg'}))})},
  sessionStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},
  URL:class extends URL {static createObjectURL(){return 'blob:mock'}static revokeObjectURL(){}},
@@ -24,6 +24,7 @@ vm.createContext(ctx);vm.runInContext(fs.readFileSync('firmware/ui/camera.js','u
  node('file').files=[{size:100}];await node('file').onchange();
  assert.equal(node('answer').textContent,'2 + 2 = 4');assert.match(node('screenStatus').textContent,/Ekran yenilendi/);
  assert.deepEqual(calls.map(x=>x.url),['https://api.example/api/status','https://api.example/api/frames','https://api.example/api/jobs/exact-job','/api/text','/api/screen']);
+ const profile=JSON.parse(Buffer.from(calls[1].opts.headers['X-Study-Profile'],'base64').toString());assert.equal(profile.course,'Makroökonomie');
  assert.equal(calls[1].opts.credentials,'omit');assert.equal(calls[3].opts.credentials,'same-origin');
  assert.equal(calls[1].opts.headers.Authorization,'Bearer '+'a'.repeat(40));assert.equal(calls[3].opts.headers.Authorization,undefined);
  const shortened=vm.runInContext("forScreen('ş😀'.repeat(3000))",ctx);assert(new TextEncoder().encode(shortened).length<=6000);assert.match(shortened,/kisaltildi/);

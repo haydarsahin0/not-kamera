@@ -1,6 +1,6 @@
-# Not Ekran V2 — 0.2.0
+# Not Ekran V2 — 0.2.1
 
-**0.1.0 metin gönderimi kullanıcı tarafından fiziksel cihazda doğrulandı. Yeni 0.2.0 fotoğraf köprüsünün gerçek iPhone/API testi bekliyor.**
+**0.1.0 metin gönderimi kullanıcı tarafından fiziksel cihazda doğrulandı. Yeni 0.2.1 fotoğraf köprüsünün gerçek iPhone/API testi bekliyor.**
 
 Yalnızca Waveshare ESP32-S3-ePaper-1.54 V2 (8 MB flash / 8 MB PSRAM).
 V1, başka kart veya farklı panel için kullanılmaz. Telefon fotoğrafını HTTPS sunucuya gönderip OpenAI yanıtını ekrana aktaran yerel arayüz içerir.
