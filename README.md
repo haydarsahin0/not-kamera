@@ -2,13 +2,31 @@
 
 iPhone Safari için fotoğraf analizi ve sesli okuma arayüzü. GitHub Pages arayüzü + ayrı Python API sunucusu.
 
-## Durum
+## Canlı kurulum — 0.3.0
 
-- Kaynak kodu haydarsahin0/not-kamera deposundadır; canlı API sunucusu henüz kurulmadı. GitHub Pages yayını kullanıcı tarafından başlatılacaktır.
-- OpenAI API anahtarı ve seçtiğin görüntü destekleyen model kimliği gereklidir. API kullanımı ayrıca ücretlendirilir.
-- iPhone donanımı ve gerçek XIAO kamera ile henüz test edilmedi. Kamera yazılımı bu pakete dahil değildir; aşağıda HTTP protokolü tanımlıdır.
-- Örnek düğmesi gerçek API çağrısı yapmaz; açıkça örnek olarak işaretlidir.
-- Bu ilk sürüm tek kullanıcı ve tek sunucu işlemi içindir. Çok kullanıcılı bir hizmet değildir.
+Dijitalarsam Supabase projesinde `not-kamera-api` fonksiyonu yayındadır. Sabit model `gpt-6.1-sol`, Responses API, medium reasoning, 6000 çıktı token sınırı, `store:false`. API adresi hem Pages hem cihaz sayfasında hazır doldurulur:
+
+`https://jckoovsocynnxbrsalld.supabase.co/functions/v1/not-kamera-api`
+
+OpenAI anahtarı yalnızca Supabase secret `NOT_KAMERA_OPENAI_API_KEY` içinde kalır. APP_TOKEN yerine kullanıcıya özel uygulama erişim kodu kullanılır; yalnızca SHA-256 özeti `not_kamera_access` tablosunda tutulur. Gerçek kod GitHub'da, cihaz firmware'inde veya JavaScript'te bulunmaz. Sana özel kurulum bağlantısı kodu URL fragment'inden alır, fragment'i adres çubuğundan kaldırır, sekme oturumunda saklar ve bağlantıyı otomatik kontrol eder. Kod cihazın Basic giriş şifresinden farklıdır.
+
+1. Windows Chrome/Edge ile `web/install/` üzerinden 0.3.0 yükle; önceki Not Ekran ayarlarını korumak için erase seçme.
+2. Telefon ve cihazı internet erişimli ortak 2,4 GHz Wi-Fi ağına bağla. Cihazın LAN IP'sini BOOT'a uzun basarak gör. iPhone hotspot erişimi ayrıca donanımda doğrulanmalıdır.
+3. Sana özel Pages kurulum bağlantısını aç. Bağlantı bölümünde cihazın yerel HTTP adresini girip “Cihazın fotoğraf sayfasını aç”a dokun. Bu bağlantı uygulama erişim kodunu cihaz sayfasına aktarır; cihazın admin girişini yap.
+4. Cihaz sayfasındaki fotoğraf seçimi onaylandığında analiz ve ekrana gönderim otomatik olur. Safari açık kalmalı. Yalnızca Pages ana sayfasında analiz yaparsan sonuç telefonda görünür; fiziksel ekrana aktarım cihazın fotoğraf sayfasında yapılır.
+
+Supabase kendi internete açık HTTPS adresini sağlar. GitHub Pages yalnızca arayüzdür. Oyun/ödeme tablolarına veya fonksiyonlarına dokunulmadı. Analiz için `not_kamera_access`, `not_kamera_jobs`, iki service-role RPC ve yeni Edge Function eklendi. RLS açık; anon/authenticated tablo erişimi ve RPC çalıştırma izni yoktur. Fonksiyonda özel bearer kod doğrulaması olduğundan platform JWT denetimi kapalıdır; anonim istek 401 döner. Görüntü kalıcı saklanmaz. Sonuçlar 24 saat sonra listeleme/claim sırasında temizlenir.
+
+Kabul limitleri veritabanında işlemsel kilitle korunur: aynı anda bir analiz, en az 10 saniye aralık ve saatte en fazla 60 yeni iş. Bu bir para cinsinden harcama tavanı değildir. Başarılı aynı fotoğraf+profil tekrarında 24 saatlik önbellek kullanılır. 105 saniyeyi geçen OpenAI isteği hata olur; arka plan işi Supabase `EdgeRuntime.waitUntil` ile devam eder. 3 dakikalık eski processing işleri sonraki istek sırasında hata durumuna çevrilir. Model kendiliğinden değiştirilmez.
+
+### Doğrulama
+
+- Canlı Supabase'de yetkili model kontrolü 200 ve `ready:true`; anonim erişim 401.
+- Gerçek örnek PNG → GPT-6.1 Sol → Almanca “Aufgabe 1)” ve “Aufgabe 2)” cevapları başarıyla alındı; gerçek BIP 1000 ve çarpan etkisi 50 sonuçları görüldü. Test kaydı canlı geçmişten silindi.
+- Node testleri profil, numaralama yönergesi, asenkron iş, erişim, CORS, eksik cevap ve görsel sınırlarını doğrular.
+- 0.3.0 gerçek ESP32 derlemesi geçti. Önceki 0.1.0 metin aktarımı kullanıcı cihazında çalıştı; yeni 0.3.0 fiziksel iPhone→ekran akışı henüz test edilmedi.
+
+Kaynaklar `supabase/` içindedir. Aşağıdaki Python backend, ayrı bir sunucu tercih edilirse kullanılan alternatif kurulumdur; canlı Supabase kullanımı için gerekmez.
 
 ## 1. Yerel arayüz
 
@@ -53,7 +71,7 @@ uvicorn backend.app:app --host 127.0.0.1 --port 8000 --workers 1
 2. Bu klasörün içeriğini, `.github` klasörü dahil, deponun köküne koy. Gerçek sırları ekleme.
 3. Varsayılan dalı `main` yap.
 4. Settings → Pages → Source: GitHub Actions seç.
-5. Actions → Publish web app → Run workflow seç. Workflow yalnızca elle başlatılır ve sadece `web/` klasörünü yayınlar. Backend ve sırlar Pages çıktısına girmez.
+5. Actions → Publish web app → Run workflow seç. Workflow main dalında web değişikliklerinde veya elle başlatılır ve sadece `web/` klasörünü yayınlar. Backend ve sırlar Pages çıktısına girmez.
 6. Ana sayfa `https://haydarsahin0.github.io/DEPO-ADI/` olur.
 7. iPhone Safari'de Bağlantı ekranına ayrı sunucunun HTTPS adresini ve APP_TOKEN değerini gir.
 
@@ -98,13 +116,13 @@ Görüntü netliği veya yapay zekâ doğruluğu garanti değildir. iPhone ekran
 - Gerçek OpenAI çağrısı yapılmadı.
 - Tarayıcı motoru bu ortamda indirilemediği için görsel tarayıcı testi tamamlanamadı. Gerçek iPhone/Safari ve kamera testi yapılmadı.
 
-## V2 e-paper ekran — 0.2.0 fotoğraf köprüsü
+## V2 e-paper ekran — 0.3.0 fotoğraf köprüsü
 
-0.1.0 firmware ile cihazda metin gönderimi kullanıcı tarafından doğrulandı. 0.2.0,
+0.1.0 firmware ile cihazda metin gönderimi kullanıcı tarafından doğrulandı. 0.3.0,
 telefonun fotoğrafı sunucuya göndermesini ve yanıtı cihaza aktarmasını ekler.
 
 1. Actions → Publish web app → Run workflow ile Pages'i güncelle.
-2. Windows Chrome/Edge üzerinden [yükleyiciyi](https://haydarsahin0.github.io/not-kamera/install/) açıp 0.2.0 yükle. Mevcut Not Ekran ayarlarını korumak için “erase” seçme.
+2. Windows Chrome/Edge üzerinden [yükleyiciyi](https://haydarsahin0.github.io/not-kamera/install/) açıp 0.3.0 yükle. Mevcut Not Ekran ayarlarını korumak için “erase” seçme.
 3. Cihazı internet erişimi olan 2,4 GHz Wi-Fi ağına bağla. Telefon da bu ağda olsun. BOOT'a 3 saniye basıp cihazın LAN IP adresini gör. iPhone hotspot da denenebilir, telefondan istemci IP'sine erişim ayrıca doğrulanmalıdır.
 4. Safari'de cihazın **http://LAN-IP** adresini aç. Cihazın admin girişini yap, “Fotoğraf çek ve cevabı ekrana gönder”e dokun.
 5. Ayrı backend'in HTTPS adresini ve **APP_TOKEN** değerini gir. **OpenAI anahtarını bu forma girme.** Sunucu OPENAI_API_KEY ve görüntü destekli OPENAI_MODEL ile yapılandırılmış olmalı.
@@ -125,6 +143,6 @@ Hem Pages arayüzünde hem cihazın fotoğraf sayfasında ders ve bilinen cevap 
 
 Sorudaki operator, alt görev, verilen puan/kelime sınırı, hesap adımları, birim ve yorumlama dikkate alınması istenir. Gerçek sınav kuralları bilinmediğinde uydurulmaz; bu alana kullanıcı tarafından girilmelidir. Grafik isteyen görevde metin açıklaması çizimin yerini tutmaz. Bir 1,0 notu veya her cevabın doğruluğu garanti edilemez. Profil veya talimat değişirse aynı fotoğraf için eski sonuç tekrar kullanılmaz. Bu değişiklikler gerçek modelle henüz değerlendirilmedi.
 
-Profil arayüzü için Pages'i tekrar yayınla; cihaz sayfası için 0.2.1 firmware yükle. Backend de aynı revizyona güncellenmelidir.
+Profil arayüzü için Pages'i tekrar yayınla; cihaz sayfası için 0.3.0 firmware yükle. Backend de aynı revizyona güncellenmelidir.
 
 Cevaplar “Aufgabe 1)”, “Aufgabe 2)” başlıkları ve boş satırla ayrılır. Görseldeki numaralar ve alt maddeler korunur; numara yoksa kendi sıralaması olduğunu belirtir.

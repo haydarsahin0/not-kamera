@@ -2,7 +2,7 @@ const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/st
 const nodes=new Map();
 function node(id){if(!nodes.has(id))nodes.set(id,{value:'',disabled:false,hidden:false,textContent:'',classList:{toggle(){}},files:[]});return nodes.get(id)}
 const calls=[],storage=new Map();let failDisplay=false;
-const ctx={console,btoa:s=>Buffer.from(s,'binary').toString('base64'),TextEncoder,URLSearchParams,AbortController,AbortSignal,DOMException,Blob,Date,
+const ctx={TextDecoder,atob,location:{hash:''},history:{},console,btoa:s=>Buffer.from(s,'binary').toString('base64'),TextEncoder,URLSearchParams,AbortController,AbortSignal,DOMException,Blob,Date,
  document:{getElementById:node,createElement:()=>({getContext:()=>({drawImage(){}}),toBlob:fn=>fn(new Blob(['jpeg'],{type:'image/jpeg'}))})},
  sessionStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},
  URL:class extends URL {static createObjectURL(){return 'blob:mock'}static revokeObjectURL(){}},
@@ -27,8 +27,15 @@ vm.createContext(ctx);vm.runInContext(fs.readFileSync('firmware/ui/camera.js','u
  const profile=JSON.parse(Buffer.from(calls[1].opts.headers['X-Study-Profile'],'base64').toString());assert.equal(profile.course,'Makroökonomie');
  assert.equal(calls[1].opts.credentials,'omit');assert.equal(calls[3].opts.credentials,'same-origin');
  assert.equal(calls[1].opts.headers.Authorization,'Bearer '+'a'.repeat(40));assert.equal(calls[3].opts.headers.Authorization,undefined);
+ assert.equal(vm.runInContext("checkUrl('https://project.supabase.co/functions/v1/not-kamera-api/')",ctx),'https://project.supabase.co/functions/v1/not-kamera-api');
  const shortened=vm.runInContext("forScreen('ş😀'.repeat(3000))",ctx);assert(new TextEncoder().encode(shortened).length<=6000);assert.match(shortened,/kisaltildi/);
  failDisplay=true;await node('retryScreen').onclick();assert.match(node('notice').textContent,/hata bildirdi/);
  assert.equal(node('send').disabled,false);assert.equal(node('retryScreen').disabled,false);
+ const secondNodes=new Map();let bootstrap;
+ const get=id=>{if(!secondNodes.has(id))secondNodes.set(id,{value:'',hidden:false,classList:{toggle(){}},requestSubmit(){bootstrap=this.onsubmit({preventDefault(){}})}});return secondNodes.get(id)};
+ const base='https://jckoovsocynnxbrsalld.supabase.co/functions/v1/not-kamera-api';const setupToken='s'.repeat(48);
+ const boot={...ctx,document:{...ctx.document,getElementById:get},location:{hash:'#setup='+Buffer.from(JSON.stringify({url:base,token:setupToken})).toString('base64'),pathname:'/camera',search:''},history:{replaceState(){boot.location.hash=''}},sessionStorage:{getItem(){return null},setItem(){},removeItem(){}},fetch:async(url,opts)=>{assert.equal(url,base+'/api/status');assert.equal(opts.headers.Authorization,'Bearer '+setupToken);return {ok:true,json:async()=>({ready:true})}}};
+ vm.createContext(boot);vm.runInContext(fs.readFileSync('firmware/ui/camera.js','utf8'),boot);await bootstrap;
+ assert.equal(boot.location.hash,'');assert.equal(get('appToken').value,setupToken);assert.match(get('notice').textContent,/Bağlantı hazır/);
  console.log('PASS photo → OpenAI job → screen, auth isolation, UTF-8 limit, display failure');
 })().catch(e=>{console.error(e);process.exitCode=1});

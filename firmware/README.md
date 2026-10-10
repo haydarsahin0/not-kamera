@@ -1,6 +1,6 @@
-# Not Ekran V2 — 0.2.1
+# Not Ekran V2 — 0.3.0
 
-**0.1.0 metin gönderimi kullanıcı tarafından fiziksel cihazda doğrulandı. Yeni 0.2.1 fotoğraf köprüsünün gerçek iPhone/API testi bekliyor.**
+**0.1.0 metin gönderimi kullanıcı tarafından fiziksel cihazda doğrulandı. Yeni 0.3.0 fotoğraf köprüsünün gerçek iPhone/API testi bekliyor.**
 
 Yalnızca Waveshare ESP32-S3-ePaper-1.54 V2 (8 MB flash / 8 MB PSRAM).
 V1, başka kart veya farklı panel için kullanılmaz. Telefon fotoğrafını HTTPS sunucuya gönderip OpenAI yanıtını ekrana aktaran yerel arayüz içerir.
@@ -92,3 +92,7 @@ Başarılı derleme, donanım çalışmasının garantisi değildir.
 
 Fabrika geri dönüşü: üretici reposundaki `03_Firmware/V2-FactoryProgram.bin` ve
 üreticinin yükleme yöntemi. Sorunda önce log alın; rastgele farklı kart firmware'i yüklemeyin.
+
+## Canlı Supabase bağlantısı
+
+0.3.0 cihaz sayfası Supabase fonksiyon adresini varsayılan doldurur ve HTTPS adresinde /functions/v1/not-kamera-api yolunu kabul eder. Kullanıcıya özel kurulum fragment'i yalnızca sekmede işlenir; firmware hiçbir API veya uygulama sırrı içermez. OpenAI modeli sunucuda GPT-6.1 Sol olarak sabittir. Ana README canlı kurulum ve test durumunu açıklar.

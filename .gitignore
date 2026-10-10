@@ -8,3 +8,7 @@ firmware/build/
 firmware/NotEkran/epaper_driver_bsp.cpp
 firmware/NotEkran/epaper_driver_bsp.h
 firmware/NotEkran/camera_page.h
+
+supabase/.temp/
+supabase/.env
+supabase/functions/.env
