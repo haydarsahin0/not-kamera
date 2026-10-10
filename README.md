@@ -2,20 +2,21 @@
 
 iPhone Safari için fotoğraf analizi ve sesli okuma arayüzü. GitHub Pages arayüzü + ayrı Python API sunucusu.
 
-## Canlı kurulum — 0.3.0
+## Canlı kurulum — 0.4.0
 
 Dijitalarsam Supabase projesinde `not-kamera-api` fonksiyonu yayındadır. Sabit model `gpt-6.1-sol`, Responses API, medium reasoning, 6000 çıktı token sınırı, `store:false`. API adresi hem Pages hem cihaz sayfasında hazır doldurulur:
 
 `https://jckoovsocynnxbrsalld.supabase.co/functions/v1/not-kamera-api`
 
-OpenAI anahtarı yalnızca Supabase secret `NOT_KAMERA_OPENAI_API_KEY` içinde kalır. APP_TOKEN yerine kullanıcıya özel uygulama erişim kodu kullanılır; yalnızca SHA-256 özeti `not_kamera_access` tablosunda tutulur. Gerçek kod GitHub'da, cihaz firmware'inde veya JavaScript'te bulunmaz. Sana özel kurulum bağlantısı kodu URL fragment'inden alır, fragment'i adres çubuğundan kaldırır, sekme oturumunda saklar ve bağlantıyı otomatik kontrol eder. Kod cihazın Basic giriş şifresinden farklıdır.
+OpenAI anahtarı yalnızca Supabase secret `NOT_KAMERA_OPENAI_API_KEY` içinde kalır. APP_TOKEN yerine kullanıcıya özel uygulama erişim kodu kullanılır; yalnızca SHA-256 özeti `not_kamera_access` tablosunda tutulur. Gerçek kod GitHub'da veya derlenmiş firmware'de bulunmaz. Eşleştirmede cihazın NVS alanına kaydedilir; OpenAI API anahtarı daima sunucudadır. Sana özel kurulum bağlantısı kodu URL fragment'inden alır, fragment'i adres çubuğundan kaldırır, sekme oturumunda saklar ve bağlantıyı otomatik kontrol eder. Kod cihazın Basic giriş şifresinden farklıdır.
 
-1. Windows Chrome/Edge ile `web/install/` üzerinden 0.3.0 yükle; önceki Not Ekran ayarlarını korumak için erase seçme.
+1. Windows Chrome/Edge ile `web/install/` üzerinden 0.4.0 yükle; önceki Not Ekran ayarlarını korumak için erase seçme.
 2. Telefon ve cihazı internet erişimli ortak 2,4 GHz Wi-Fi ağına bağla. Cihazın LAN IP'sini BOOT'a uzun basarak gör. iPhone hotspot erişimi ayrıca donanımda doğrulanmalıdır.
-3. Sana özel Pages kurulum bağlantısını aç. Bağlantı bölümünde cihazın yerel HTTP adresini girip “Cihazın fotoğraf sayfasını aç”a dokun. Bu bağlantı uygulama erişim kodunu cihaz sayfasına aktarır; cihazın admin girişini yap.
-4. Cihaz sayfasındaki fotoğraf seçimi onaylandığında analiz ve ekrana gönderim otomatik olur. Safari açık kalmalı. Yalnızca Pages ana sayfasında analiz yaparsan sonuç telefonda görünür; fiziksel ekrana aktarım cihazın fotoğraf sayfasında yapılır.
+3. Sana özel Pages kurulum bağlantısını aç. Bağlantı bölümünde cihazın yerel HTTP adresini girip “Cihazı eşleştir”a dokun. Bu bağlantı uygulama erişim kodunu cihaz sayfasına aktarır; cihazın admin girişini yap.
+4. Cihaz sayfasında bağlantı kontrolü kodu NVS'ye kaydeder. Bundan sonra HTTPS Pages ana sayfasından fotoğraf seçildiğinde cevap otomatik cihaz için seçilir. Cihaz kendi internet bağlantısıyla HTTPS üzerinden tamamını alır; telefonun yerel cihaza erişmesi yalnızca ilk eşleştirmede gerekir. Fotoğrafın yüklemesi bitince Safari açık kalması fiziksel aktarım için gerekmez.
+5. BOOT: tek basış sonraki sayfa, çift basış önceki sayfa, 3 saniye basılı tutma bağlantı bilgileri. 64 KiB'ye kadar tam cevap; uzunluk aşılırsa görünür hata, sessiz kesme yok. Büyük metin küçük fontta tüm sayfalara bölünür. Bir fotoğraftaki tüm görevler aynı cevap içinde korunur. Yeni fotoğraf yeni cevabı gösterir; önceki cevaplar sitedeki geçmişten tekrar seçilebilir.
 
-Supabase kendi internete açık HTTPS adresini sağlar. GitHub Pages yalnızca arayüzdür. Oyun/ödeme tablolarına veya fonksiyonlarına dokunulmadı. Analiz için `not_kamera_access`, `not_kamera_jobs`, iki service-role RPC ve yeni Edge Function eklendi. RLS açık; anon/authenticated tablo erişimi ve RPC çalıştırma izni yoktur. Fonksiyonda özel bearer kod doğrulaması olduğundan platform JWT denetimi kapalıdır; anonim istek 401 döner. Görüntü kalıcı saklanmaz. Sonuçlar 24 saat sonra listeleme/claim sırasında temizlenir.
+Supabase kendi internete açık HTTPS adresini sağlar. GitHub Pages yalnızca arayüzdür. Oyun/ödeme tablolarına veya fonksiyonlarına dokunulmadı. Analiz için `not_kamera_access`, `not_kamera_jobs`, `not_kamera_device`, iki service-role RPC ve yeni Edge Function eklendi. RLS açık; anon/authenticated tablo erişimi ve RPC çalıştırma izni yoktur. Fonksiyonda özel bearer kod doğrulaması olduğundan platform JWT denetimi kapalıdır; anonim istek 401 döner. Görüntü kalıcı saklanmaz. Sonuçlar 24 saat sonra listeleme/claim sırasında temizlenir.
 
 Kabul limitleri veritabanında işlemsel kilitle korunur: aynı anda bir analiz, en az 10 saniye aralık ve saatte en fazla 60 yeni iş. Bu bir para cinsinden harcama tavanı değildir. Başarılı aynı fotoğraf+profil tekrarında 24 saatlik önbellek kullanılır. 105 saniyeyi geçen OpenAI isteği hata olur; arka plan işi Supabase `EdgeRuntime.waitUntil` ile devam eder. 3 dakikalık eski processing işleri sonraki istek sırasında hata durumuna çevrilir. Model kendiliğinden değiştirilmez.
 
@@ -24,7 +25,7 @@ Kabul limitleri veritabanında işlemsel kilitle korunur: aynı anda bir analiz,
 - Canlı Supabase'de yetkili model kontrolü 200 ve `ready:true`; anonim erişim 401.
 - Gerçek örnek PNG → GPT-6.1 Sol → Almanca “Aufgabe 1)” ve “Aufgabe 2)” cevapları başarıyla alındı; gerçek BIP 1000 ve çarpan etkisi 50 sonuçları görüldü. Test kaydı canlı geçmişten silindi.
 - Node testleri profil, numaralama yönergesi, asenkron iş, erişim, CORS, eksik cevap ve görsel sınırlarını doğrular.
-- 0.3.0 gerçek ESP32 derlemesi geçti. Önceki 0.1.0 metin aktarımı kullanıcı cihazında çalıştı; yeni 0.3.0 fiziksel iPhone→ekran akışı henüz test edilmedi.
+- 0.4.0 ESP32 derlemesi ve tek/çift/uzun basış testleri geçti. Sunucu tam metin, SHA-256 ve eski teslimat onayı yarış testleri geçti. Önceki metin aktarımı fiziksel cihazda çalıştı; yeni bulut→ekran akışı cihazda ayrıca doğrulanmalıdır.
 
 Kaynaklar `supabase/` içindedir. Aşağıdaki Python backend, ayrı bir sunucu tercih edilirse kullanılan alternatif kurulumdur; canlı Supabase kullanımı için gerekmez.
 
@@ -116,26 +117,18 @@ Görüntü netliği veya yapay zekâ doğruluğu garanti değildir. iPhone ekran
 - Gerçek OpenAI çağrısı yapılmadı.
 - Tarayıcı motoru bu ortamda indirilemediği için görsel tarayıcı testi tamamlanamadı. Gerçek iPhone/Safari ve kamera testi yapılmadı.
 
-## V2 e-paper ekran — 0.3.0 fotoğraf köprüsü
+## V2 e-paper ekran — 0.4.0 doğrudan bulut aktarımı
 
-0.1.0 firmware ile cihazda metin gönderimi kullanıcı tarafından doğrulandı. 0.3.0,
-telefonun fotoğrafı sunucuya göndermesini ve yanıtı cihaza aktarmasını ekler.
+1. USB üzerinden 0.4.0 yükle; erase seçme.
+2. Cihazı internet erişimi olan kişisel 2,4 GHz Wi-Fi ağına bağla. BOOT'a uzun basıp IP'yi gör.
+3. Özel kurulum bağlantısında Bağlantı → Cihazı eşleştir; admin ve cihaz koduyla yerel sayfayı aç.
+4. Cihaz sayfasındaki sunucu kontrolü erişim kodunu kaydeder. Pages ana sayfasına dön.
+5. Fotoğrafı seç; sunucu hazır cevabı seçer, cihaz doğrudan HTTPS üzerinden indirir. Ekran yenileme onayı gelmeden site başarı göstermez.
+6. Tek basış ileri, çift basış geri. 3 saniye basılı tutma bağlantı bilgileri.
 
-1. Actions → Publish web app → Run workflow ile Pages'i güncelle.
-2. Windows Chrome/Edge üzerinden [yükleyiciyi](https://haydarsahin0.github.io/not-kamera/install/) açıp 0.3.0 yükle. Mevcut Not Ekran ayarlarını korumak için “erase” seçme.
-3. Cihazı internet erişimi olan 2,4 GHz Wi-Fi ağına bağla. Telefon da bu ağda olsun. BOOT'a 3 saniye basıp cihazın LAN IP adresini gör. iPhone hotspot da denenebilir, telefondan istemci IP'sine erişim ayrıca doğrulanmalıdır.
-4. Safari'de cihazın **http://LAN-IP** adresini aç. Cihazın admin girişini yap, “Fotoğraf çek ve cevabı ekrana gönder”e dokun.
-5. Ayrı backend'in HTTPS adresini ve **APP_TOKEN** değerini gir. **OpenAI anahtarını bu forma girme.** Sunucu OPENAI_API_KEY ve görüntü destekli OPENAI_MODEL ile yapılandırılmış olmalı.
-6. Bağlantıyı kontrol et. “Fotoğraf çek veya seç” ile çekimi yapıp onayla. Otomatik analiz seçeneği açıksa fotoğraf sunucuya gönderilir, yanıt otomatik ekrana aktarılır. Çekim kamera uygulamasında kullanıcı onayı ister.
-7. “Ekran yenilendi” görüldüğünde BOOT ile sayfalarda ilerle. Tam yanıt telefonda kalır; 6000 UTF-8 bayt üzeri ekranda kısaltılır.
+Cihaz 4 saniyede bir HTTPS kontrolü yapar. TLS sertifikası kamuya açık GTS ve ISRG kökleriyle, saat NTP ile doğrulanır; güvensiz TLS modu yoktur. Ağ işlemi ayrı FreeRTOS task'inde çalışır. Ekran ana task'ten güncellenir. Tam metnin bayt sayısı ve SHA-256 doğrulanır. Ekran sürücüsü sağlıklı olmadan sunucuya onay gitmez. Fiziksel uçtan uca test henüz yapılmadı.
 
-Safari açık ve ön planda kalmalı. Telefon hem HTTPS sunucuya hem cihazın yerel IP'sine ulaşmalı. Cihazın internetsiz NotEkran ağına bağlanmak tek başına bu koşulu sağlamaz. GitHub Pages'ten yerel HTTP cihaza erişmeye çalışmak yerine, fotoğraf sayfası **cihazdan** açılır: aynı origin ile metin aktarılır, HTTPS sunucuya CORS ile bağlanılır. Sunucu varsayılan olarak özel LAN HTTP origin'lerine izin verir; kimlik doğrulama her istekte devam eder. `ALLOW_LOCAL_DEVICE_ORIGINS=0` ile bunu kapatıp tam cihaz origin'ini `ALLOWED_ORIGINS` içine yazabilirsin.
-
-Bekleyen yanıtın kontrolü `/api/jobs/{id}` ile yalnızca kendi işini takip eder.
-Bağlantı koparsa yeni analiz başlatmak yerine “Bekleyen cevabı kontrol et”e dokun.
-Ekran aktarımı hata verirse “Cihaza yeniden gönder” kullanılabilir. Takibi durdurmak sunucuda başlamış API isteğini iptal etmez.
-
-Sunucu bir OpenAI Responses isteği yapar (`store:false`); görüntü RAM'de işlenir, yanıt SQLite'ta 24 saat tutulur. Sağlayıcının API veri işleme şartları geçerlidir. Gerçek OpenAI çağrısı ve yeni akışın fiziksel Safari testi yapılmadı; canlı HTTPS sunucu ve API kimlik bilgileri henüz sağlanmadı. Donanım ayrıntıları ve derleme: [firmware rehberi](firmware/README.md).
+Yeni cevap önceki ekrandaki cevabın yerine geçer; önceki cevap sitedeki Son çalışmalar bölümünden seçilip Cihaza yeniden gönder ile tekrar açılır. Tek fotoğraftaki bütün sorular sıralı metinde kalır. 65.536 UTF-8 bayt üzerindeki cevap kesilmez, hata döner.
 
 ## Ders profili ve Almanca cevaplar
 
@@ -143,6 +136,6 @@ Hem Pages arayüzünde hem cihazın fotoğraf sayfasında ders ve bilinen cevap 
 
 Sorudaki operator, alt görev, verilen puan/kelime sınırı, hesap adımları, birim ve yorumlama dikkate alınması istenir. Gerçek sınav kuralları bilinmediğinde uydurulmaz; bu alana kullanıcı tarafından girilmelidir. Grafik isteyen görevde metin açıklaması çizimin yerini tutmaz. Bir 1,0 notu veya her cevabın doğruluğu garanti edilemez. Profil veya talimat değişirse aynı fotoğraf için eski sonuç tekrar kullanılmaz. Bu değişiklikler gerçek modelle henüz değerlendirilmedi.
 
-Profil arayüzü için Pages'i tekrar yayınla; cihaz sayfası için 0.3.0 firmware yükle. Backend de aynı revizyona güncellenmelidir.
+Profil arayüzü için Pages'i tekrar yayınla; cihaz sayfası için 0.4.0 firmware yükle. Backend de aynı revizyona güncellenmelidir.
 
 Cevaplar “Aufgabe 1)”, “Aufgabe 2)” başlıkları ve boş satırla ayrılır. Görseldeki numaralar ve alt maddeler korunur; numara yoksa kendi sıralaması olduğunu belirtir.

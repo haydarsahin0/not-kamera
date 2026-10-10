@@ -9,3 +9,6 @@ RLS açık ve anon/authenticated yetkileri kaldırılmış olduğundan policy bu
 Test: node --test supabase/tests/api.test.mjs
 
 Kaynak index.ts tek dosyadır; JS uyumlu sözdizimi Node 24 testlerinde kullanılır. Supabase Edge Runtime gerçek dağıtımda derler. Gerçek model testi bir Makroökonomie görseliyle tamamlandı; test kaydı silindi.
+
+
+0.4.0: not_kamera_device tablosu seçili job, teslimat UUID'si, son cihaz kontrolü ve ekran onayını tutar. RLS ve service_role yetkisi diğer çalışma tablolarıyla aynıdır. /api/device/poll düz metin ve SHA-256 döndürür; /api/device/ack yalnızca güncel teslimatı onaylar. /api/device/select önceki cevabı yeniden gönderir. Tüm uçlar aynı özel bearer doğrulamasını kullanır. Ekran onayı yalnızca cihaz firmware'inin sağlıklı ekran yenilemesinden sonra gönderilir; sunucu bu onayı donanımdan bağımsız olarak doğrulayamaz. Anahtar fiziksel cihaz NVS'sinde tutulur, derlenmiş firmware'e gömülmez.
