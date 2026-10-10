@@ -97,3 +97,13 @@ Görüntü netliği veya yapay zekâ doğruluğu garanti değildir. iPhone ekran
 - API: yetkisiz istek, cihaz kodunun sonuçları okuyamaması, eksik Claude ayarı, bozuk resim reddi, JPEG gönderimi, taklit Claude cevabı, sonuç listeleme, yabancı origin reddi ve geçmiş silme testleri geçti.
 - Gerçek Claude çağrısı yapılmadı.
 - Tarayıcı motoru bu ortamda indirilemediği için görsel tarayıcı testi tamamlanamadı. Gerçek iPhone/Safari ve kamera testi yapılmadı.
+
+## V2 e-paper ekran — ilk donanım denemesi
+
+`firmware/` klasörüne yerel Wi-Fi metin ekranı yazılımı eklendi. Windows Chrome/Edge
+üzerinden yükleyici `web/install/` içindedir. Pages yayınını tekrar çalıştırınca
+https://haydarsahin0.github.io/not-kamera/install/ adresinden açılabilir.
+
+Bu sürümün cihaz sayfası doğrudan cihazda çalışır; Pages veya Python backend'e bağlı
+değildir. Kamera/Claude sonuçlarını ekrana otomatik taşıma henüz uygulanmadı.
+Yalnızca V2 içindir; fiziksel cihazda henüz denenmedi. Ayrıntılar: [kurulum rehberi](firmware/README.md).
