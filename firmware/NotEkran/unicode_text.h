@@ -3,6 +3,7 @@
 #include <vector>
 #include <stdio.h>
 #include "unicode_font_data.h"
+#include "math_text.h"
 
 namespace NoteText {
 inline const NoteFont::Font &font(int size) { return size==1?NoteFont::font16:NoteFont::font18; }
@@ -48,7 +49,7 @@ inline std::string normalize(const std::string &s) {
   if(cp=='\n'||glyph(NoteFont::font18,cp))out+=encode(cp);
   else {char b[20];snprintf(b,sizeof(b),"[U+%04lX]",(unsigned long)cp);out+=b;}
  }
- return out;
+ return NoteMath::format(out);
 }
 inline int width(const std::string &s,const NoteFont::Font &f) {
  int x=0,extent=0;for(size_t i=0;i<s.size();){auto g=glyph(f,decode(s,i));if(g){int ink=x+g->left+g->width;if(ink>extent)extent=ink;x+=g->advance;}}return x>extent?x:extent;

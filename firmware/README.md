@@ -1,4 +1,13 @@
-# Not Ekran V2 — 0.10.0
+# Not Ekran V2 — 0.10.1
+
+## 0.10.1: veritabanı düzeltmesi ve matematik gösterimi
+
+Canlı hata kaydı: PostgreSQL 21000, “DELETE requires a WHERE clause”. Bağlam sıfırlama yalnızca mevcut generation değerine ait sayfaları temizler; güvenlik koruması veya roller değiştirilmez. Supabase düzeltmesi mevcut cihaza yeniden yükleme gerektirmeden etkilidir. Açık kullanıcı temizleme işlemi mevcut kayıt zamanını hedefler.
+
+Yeni cihaz yazılımı eski/yeniden gelen metindeki y^2 → y², x^{a+b} → xᵃ⁺ᵇ, Y_{t+1} → Yₜ₊₁ ve x_i → xᵢ gösterimini destekler. 1506 font karakteri; aynı 16 px grafik metrikleri sunucuda da kullanılır. Tam LaTeX, matris veya üst üste kesir çizimi değildir. Desteklenmeyen ifadeler değiştirilmez; mevcut geçmiş dosyaları yeniden yazılmaz.
+
+Doğrulama: gerçek veritabanında yalnızca pg_temp tablolarıyla, service_role altında 1,5 MB ilk/ikinci sayfa, request-id tekrarı, sıfırlama ve temizleme; API teslim testleri; ortak sunucu/cihaz matematik örnekleri; her font karakterinin gerçek piksel sınırları; NVS/LittleFS korumalı derleme. Fiziksel cihazda USB yüklemesi sonrası görüntü kontrolü gerekir.
+
 
 ## 0.10.0: önceki sayfalara koşullu bağlantı
 
@@ -69,7 +78,7 @@ Aşağıdaki fotoğraf aktarım yolu 0.5.0 ile aynıdır.
 
 ## Tek iPhone, yalnızca cihaz sayfası
 
-1. USB ile 0.10.0 yazılımını yükle. Silme seçeneğini kapalı bırak: Wi-Fi ve uygulama eşleştirmesi NVS’den korunur.
+1. USB ile 0.10.1 yazılımını yükle. Silme seçeneğini kapalı bırak: Wi-Fi ve uygulama eşleştirmesi NVS’den korunur.
 2. NotEkran ağına bağlanıp `http://192.168.4.1/camera` aç. Yerel kullanıcı `admin`; şifre cihazın bağlantı ekranındaki koddur. Önceki eşleştirme otomatik okunur. OpenAI anahtarı girilmez veya cihaz tarafından indirilmez; yalnızca Supabase fonksiyonu bu anahtarı kullanır.
 3. Fotoğrafı çek/seç. Sayfa JPEG’e küçültüp CSRF korumalı multipart POST ile **yerel cihaza** yükler. Hiçbir tarayıcı isteği buluta gitmez.
 4. “Fotoğraf cihaz tarafından alındı” mesajından sonra NotEkran ağından çıkıp iPhone kişisel erişim noktasını aç. Cihaz önceden kaydedilen ağa tekrar bağlanır, saati NTP ile doğrular, TLS üzerinden fotoğrafı Supabase’e gönderir.

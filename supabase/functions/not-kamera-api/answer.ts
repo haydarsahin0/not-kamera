@@ -1,4 +1,5 @@
 import {GLYPH_METRICS} from './font-metrics.ts';
+import {mathText} from './math-text.ts';
 export const ANSWER_FORMAT='not-ekran-answer-v1';
 const object=properties=>({type:'object',properties,required:Object.keys(properties),additionalProperties:false});
 const string={type:'string'},number={type:'number'},point=object({x:number,y:number});
@@ -13,8 +14,8 @@ Platziere Punktlabels und Kurvenanker mit genügend Abstand; markierte Punkte li
 
 export function labelWidth(s){let x=0,extent=0;for(const ch of s.normalize('NFC')){const g=GLYPH_METRICS[ch.codePointAt(0)];if(!g)throw Error('Nicht unterstütztes Grafikzeichen.');extent=Math.max(extent,x+g[1]+g[2]);x+=g[0];}return Math.max(x,extent);}
 const fail=()=>{throw Error('Grafikdaten sind ungültig oder auf dem kleinen Display nicht lesbar.');};
-function text(s,max,empty=true){if(typeof s!=='string'||new TextEncoder().encode(s).length>max||s.includes('\0')||(!empty&&!s.trim()))fail();return s;}
-function label(s,max){text(s,48,false);if(/[\r\n\t]/.test(s)||labelWidth(s)>max)fail();return s;}
+function text(s,max,empty=true){if(typeof s!=='string')fail();s=mathText(s);if(new TextEncoder().encode(s).length>max||s.includes('\0')||(!empty&&!s.trim()))fail();return s;}
+function label(s,max){s=text(s,48,false);if(/[\r\n\t]/.test(s)||labelWidth(s)>max)fail();return s;}
 function list(a,min,max){if(!Array.isArray(a)||a.length<min||a.length>max)fail();return a;}
 function coordinate(n){if(typeof n!=='number'||!Number.isFinite(n)||n<0||n>100)fail();return n;}
 function position(p){if(!p||typeof p!=='object')fail();coordinate(p.x);coordinate(p.y);return p;}
@@ -28,17 +29,17 @@ function place(s,at,boxes,curves){const w=labelWidth(s),h=22,ax=px(at.x),ay=py(a
 export function validateDocument(doc){
  if(!doc||doc.format!==ANSWER_FORMAT)fail();let total=0;
  for(const section of list(doc.sections,1,24)){
-  text(section.task,160,false);text(section.text,65536);list(section.graphs,0,4);
+  section.task=text(section.task,160,false);section.text=text(section.text,65536);list(section.graphs,0,4);
   if(!section.text.trim()&&!section.graphs.length)fail();
   for(const g of section.graphs){
-   if(++total>12)fail();text(g.title,160,false);label(g.x_label,90);label(g.y_label,90);
-   for(const c of list(g.curves,1,3)){label(c.label,64);position(c.label_at);list(c.points,2,24).forEach(position);if(typeof c.dashed!=='boolean')fail();
+   if(++total>12)fail();g.title=text(g.title,160,false);g.x_label=label(g.x_label,90);g.y_label=label(g.y_label,90);
+   for(const c of list(g.curves,1,3)){c.label=label(c.label,64);position(c.label_at);list(c.points,2,24).forEach(position);if(typeof c.dashed!=='boolean')fail();
     // A label anchor belongs on its curve, not on an unrelated diagram area.
     let distance=Infinity;for(let i=1;i<c.points.length;i++){let a=c.points[i-1],b=c.points[i],dx=b.x-a.x,dy=b.y-a.y,t=Math.max(0,Math.min(1,((c.label_at.x-a.x)*dx+(c.label_at.y-a.y)*dy)/(dx*dx+dy*dy||1)));distance=Math.min(distance,Math.hypot(c.label_at.x-a.x-t*dx,c.label_at.y-a.y-t*dy));}if(distance>4)fail();
    }
-   for(const m of list(g.points,0,3)){label(m.label,64);position(m.at);}
+   for(const m of list(g.points,0,3)){m.label=label(m.label,64);position(m.at);}
    for(const a of list(g.arrows,0,3)){position(a.from);position(a.to);if(a.from.x===a.to.x&&a.from.y===a.to.y)fail();}
-   for(const [ticks,max,gap] of [[g.x_ticks,42,34],[g.y_ticks,26,22]]){list(ticks,0,3);for(let i=0;i<ticks.length;i++){label(ticks[i].label,max);coordinate(ticks[i].value);if(ticks.slice(0,i).some(t=>Math.abs(t.value-ticks[i].value)<gap))fail();}}
+   for(const [ticks,max,gap] of [[g.x_ticks,42,34],[g.y_ticks,26,22]]){list(ticks,0,3);for(let i=0;i<ticks.length;i++){ticks[i].label=label(ticks[i].label,max);coordinate(ticks[i].value);if(ticks.slice(0,i).some(t=>Math.abs(t.value-ticks[i].value)<gap))fail();}}
    const boxes=g.points.map(m=>({x:px(m.at.x)-4,y:py(m.at.y)-4,w:9,h:9}));g.points.forEach((m,i)=>{if(!place(m.label,m.at,boxes,g.curves)&&!place('E'+(i+1),m.at,boxes,g.curves))fail();});g.curves.forEach((c,i)=>{if(!place(c.label,c.label_at,boxes,g.curves)&&!place('C'+(i+1),c.label_at,boxes,g.curves))fail();});
   }
  }

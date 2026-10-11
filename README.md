@@ -1,5 +1,14 @@
 # Not Kamera
 
+## 0.10.1: veritabanı düzeltmesi ve matematik gösterimi
+
+Canlı hata kaydı: PostgreSQL 21000, “DELETE requires a WHERE clause”. Bağlam sıfırlama yalnızca mevcut generation değerine ait sayfaları temizler; güvenlik koruması veya roller değiştirilmez. Supabase düzeltmesi mevcut cihaza yeniden yükleme gerektirmeden etkilidir. Açık kullanıcı temizleme işlemi mevcut kayıt zamanını hedefler.
+
+Yeni cihaz yazılımı eski/yeniden gelen metindeki y^2 → y², x^{a+b} → xᵃ⁺ᵇ, Y_{t+1} → Yₜ₊₁ ve x_i → xᵢ gösterimini destekler. 1506 font karakteri; aynı 16 px grafik metrikleri sunucuda da kullanılır. Tam LaTeX, matris veya üst üste kesir çizimi değildir. Desteklenmeyen ifadeler değiştirilmez; mevcut geçmiş dosyaları yeniden yazılmaz.
+
+Doğrulama: gerçek veritabanında yalnızca pg_temp tablolarıyla, service_role altında 1,5 MB ilk/ikinci sayfa, request-id tekrarı, sıfırlama ve temizleme; API teslim testleri; ortak sunucu/cihaz matematik örnekleri; her font karakterinin gerçek piksel sınırları; NVS/LittleFS korumalı derleme. Fiziksel cihazda USB yüklemesi sonrası görüntü kontrolü gerekir.
+
+
 **0.10.0:** Yeni fotoğraf modelin son 6 önceki başarılı orijinal fotoğrafıyla birlikte değerlendirilir. Model hangi alt görevlerin önceki verilere bağlı olduğunu belirler; bağımsız sorular eski değerleri kullanmaz. Ekrana yalnızca yeni sayfadaki görevler gelir. Yerel fotoğraf sayfasında “Yeni çalışma başlat” sonraki fotoğrafla eski bağlamı sıfırlar. 18 px metin, grafikler, son 12 cevap, 30 saniyelik geçiş ve pil ekranı korunur. Windows Chrome/Edge yükleyiciyle USB güncellemesinde erase seçilmez. Fiziksel cihaz doğrulaması yükleme sonrası yapılmalıdır.
 
 **0.6.0 ekran güncellemesi:** Büyük 20 px kalın Unicode yazı, Almanca/Türkçe harfler ve matematik simgeleri, 30 saniyede otomatik sayfa geçişi. Butonlar aynı; elle geçiş okuma süresini sıfırlar. Son sayfadan başa döner. Yeni firmware derlendi ve ekran/timer testleri geçti; yeni sürümün fiziksel cihaz testi bekliyor.

@@ -1,13 +1,13 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {createHandler,parseProfile,validateImage,MODEL} from '../functions/not-kamera-api/index.ts';
 const token='a'.repeat(48),tokenHash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token)))].map(x=>x.toString(16).padStart(2,'0')).join('');
 const jobId='12345678-1234-4321-1234-123456789012';
-function setup({incomplete=false,answer='Aufgabe 1)\n2 + 2 = 4',previous=[],decision={decision:'independent',used_pages:[]},claim={}}={}){
+function setup({incomplete=false,answer='Aufgabe 1)\n2 + 2 = 4',previous=[],decision={decision:'independent',used_pages:[]},claim={},databaseError=null}={}){
  const jobs=[],tasks=[],calls=[],device={id:1};
  const fetcher=async(url,opts={})=>{
   calls.push({url,opts});
   if(url.includes('not_kamera_access'))return Response.json([{token_hash:tokenHash}]);
   if(url.endsWith('/models/'+MODEL))return Response.json({id:MODEL});
-  if(url.endsWith('/rpc/not_kamera_claim_frame')){jobs.push({id:jobId,status:'processing',created:new Date().toISOString(),answer:'',error:''});return Response.json({id:jobId,previous,context_pages:previous.length,...claim});}
+  if(url.endsWith('/rpc/not_kamera_claim_frame')){if(databaseError)return Response.json(databaseError,{status:400});jobs.push({id:jobId,status:'processing',created:new Date().toISOString(),answer:'',error:''});return Response.json({id:jobId,previous,context_pages:previous.length,...claim});}
   if(url.includes('not_kamera_device')){const q=new URL(url).searchParams;if(q.has('delivery_id')&&q.get('delivery_id')!=='eq.'+device.delivery_id)return Response.json([]);if(opts.method==='PATCH')Object.assign(device,JSON.parse(opts.body));return Response.json([device]);}
   if(url.includes('not_kamera_jobs')&&opts.method==='PATCH'){Object.assign(jobs[0],JSON.parse(opts.body));return Response.json(jobs);}
   if(url.includes('not_kamera_jobs'))return Response.json(jobs);
@@ -38,6 +38,21 @@ test('profile and image limits reject malformed input',()=>{
  assert.throws(()=>parseProfile('not-base64'));assert.throws(()=>parseProfile(btoa(JSON.stringify({course:'x'.repeat(121)}))));
  assert.throws(()=>validateImage(new Uint8Array([1,2,3]),'image/jpeg'));const b=photo();new DataView(b.buffer).setUint32(16,500000);assert.throws(()=>validateImage(b,'image/png'));
  assert.equal(parseProfile(null).course,'Makroökonomie');
+});
+test('database failures expose only a bounded code, never SQL/photos/secrets or a queued job',async()=>{
+ const s=setup({databaseError:{code:'21000',message:'private SQL or photo details'}});
+ const logs=[],original=console.error;console.error=(...args)=>logs.push(args);
+ try{
+  const r=await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png'}}));
+  assert.equal(r.status,503);const body=await r.text();assert.match(body,/21000/);assert(!body.includes('private'));
+  assert.deepEqual(logs,[['not-kamera database error',400,'21000']]);assert.equal(s.tasks.length,0);assert.equal(s.device.job_id,undefined);
+ }finally{console.error=original;}
+});
+test('mathematical notation reaches device delivery as actual superscripts and subscripts',async()=>{
+ const s=setup({answer:'y^2 + x^{a+b} = 25; Y_{t+1} = 120; x_i = 3.'});
+ await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png','X-Study-Profile':btoa('{"course":"Statistik"}')}}));await Promise.all(s.tasks);
+ const r=await s.handler(req('/api/device/poll?format=not-ekran-answer-v1'));assert.equal(r.status,200);
+ assert.equal(JSON.parse(await r.text()).sections[0].text,'y² + xᵃ⁺ᵇ = 25; Yₜ₊₁ = 120; xᵢ = 3.');
 });
 
 test('whole answer is delivered, checked and acknowledged; stale ack cannot confirm new answer',async()=>{

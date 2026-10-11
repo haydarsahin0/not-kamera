@@ -13,6 +13,8 @@ struct Raster {
  void save(const char *path){std::ofstream o(path,std::ios::binary);o<<"P5\n200 200\n255\n";o.write((char*)pixels,sizeof(pixels));}
 };
 int main(){
+ #include "../tests/math-text-fixture.h"
+ for(const auto &test:mathCases){if(NoteText::normalize(test.first)!=test.second){std::cerr<<test.first<<" got="<<NoteText::normalize(test.first)<<" expected="<<test.second<<"\n";}assert(NoteText::normalize(test.first)==test.second);assert(NoteText::normalize(test.second)==test.second);}
  const std::string supported="Größe: ÄÖÜ äöü ß; Çağrı İı Şş Ğğ Çç; α β γ δ π μ σ Σ Δ ∂ ∑ √ ∞ ≠ ≤ ≥ ± × ÷ € → ← ↔ ² ³ ₀ ₁ ₂ − – — ‘ ’ “ ” …";
  assert(NoteText::normalize(supported)==supported);
  assert(NoteText::normalize("Gro\xCC\x88\xC3\x9F" "e S\xCC\xA7")=="Größe Ş");
@@ -40,6 +42,10 @@ int main(){
  Raster sample;auto rows=NoteText::wrap("Aufgabe 1)\nGröße: 25 €\nΔY = 50\nπ ≤ 2,5 %\nx² + y₂ ≠ 0\nŞükrü",192,NoteFont::font18);
  for(size_t i=0;i<std::min<size_t>(6,rows.size());++i)NoteText::draw(sample,rows[i],4,21+NoteFont::font18.ascent+i*NoteFont::font18.lineHeight,NoteFont::font18);
  sample.save("/tmp/not-ekran-070-preview.pgm");
+ Raster math;auto formulas=NoteText::wrap(NoteText::normalize("y^2 + x^3 = 25\nY_{t+1} = 120\n10^-3 = 0,001\nπ ≤ 2,5 %\nΔY = 50\n√(x) ≠ 0"),192,NoteFont::font18);
+ assert(formulas.size()==6);
+ for(size_t row=0;row<formulas.size();++row){assert(NoteText::width(formulas[row],NoteFont::font18)<=192);assert(formulas[row].find("[U+")==std::string::npos);NoteText::draw(math,formulas[row],4,21+NoteFont::font18.ascent+row*NoteFont::font18.lineHeight,NoteFont::font18);}
+ math.save("/tmp/not-math-0101-preview.pgm");
  PageRotation timer;
  assert(!timer.due(999999,true,3,false));timer.shown(1000);
  assert(!timer.due(30999,true,3,false));assert(timer.due(31000,true,3,false));assert(!timer.due(31001,true,3,false));
