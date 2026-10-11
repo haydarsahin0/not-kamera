@@ -1,17 +1,17 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {createHandler,parseProfile,validateImage,MODEL} from '../functions/not-kamera-api/index.ts';
 const token='a'.repeat(48),tokenHash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token)))].map(x=>x.toString(16).padStart(2,'0')).join('');
 const jobId='12345678-1234-4321-1234-123456789012';
-function setup({incomplete=false,answer='Aufgabe 1)\n2 + 2 = 4'}={}){
+function setup({incomplete=false,answer='Aufgabe 1)\n2 + 2 = 4',previous=[],decision={decision:'independent',used_pages:[]},claim={}}={}){
  const jobs=[],tasks=[],calls=[],device={id:1};
  const fetcher=async(url,opts={})=>{
   calls.push({url,opts});
   if(url.includes('not_kamera_access'))return Response.json([{token_hash:tokenHash}]);
   if(url.endsWith('/models/'+MODEL))return Response.json({id:MODEL});
-  if(url.endsWith('/rpc/not_kamera_claim')){jobs.push({id:jobId,status:'processing',created:new Date().toISOString(),answer:'',error:''});return Response.json({id:jobId});}
+  if(url.endsWith('/rpc/not_kamera_claim_frame')){jobs.push({id:jobId,status:'processing',created:new Date().toISOString(),answer:'',error:''});return Response.json({id:jobId,previous,context_pages:previous.length,...claim});}
   if(url.includes('not_kamera_device')){const q=new URL(url).searchParams;if(q.has('delivery_id')&&q.get('delivery_id')!=='eq.'+device.delivery_id)return Response.json([]);if(opts.method==='PATCH')Object.assign(device,JSON.parse(opts.body));return Response.json([device]);}
   if(url.includes('not_kamera_jobs')&&opts.method==='PATCH'){Object.assign(jobs[0],JSON.parse(opts.body));return Response.json(jobs);}
   if(url.includes('not_kamera_jobs'))return Response.json(jobs);
-  if(url.endsWith('/responses')){const p=JSON.parse(opts.body);assert.equal(p.model,'gpt-6.1-sol');assert.equal(p.store,false);assert.match(p.instructions,/Aufgabe 1\)/);assert.match(p.instructions,/so kurz wie möglich und so ausführlich wie nötig/);assert.match(p.instructions,/Erkläre die Bedeutung des Ergebnisses nur, wenn gefragt oder fachlich nötig/);assert.match(p.instructions,/Jede Teilaufgabe erhält ihre eigene vollständige/);assert.match(p.input[0].content[0].text,/Statistik/);assert.equal(p.text.format.type,'json_schema');assert.equal(p.text.format.strict,true);assert.match(p.instructions,/liefere tatsächlich mindestens ein graphs-Objekt/);return Response.json({status:incomplete?'incomplete':'completed',output:[{type:'message',content:[{type:'output_text',text:typeof answer==='string'?JSON.stringify({format:'not-ekran-answer-v1',sections:[{task:'Aufgabe 1)',text:answer.replace(/^Aufgabe 1\)\n/,''),graphs:[]}]}):JSON.stringify(answer)}]}]});}
+  if(url.endsWith('/responses')){const p=JSON.parse(opts.body);assert.equal(p.model,'gpt-6.1-sol');assert.equal(p.store,false);assert.match(p.instructions,/Aufgabe 1\)/);assert.match(p.instructions,/so kurz wie möglich und so ausführlich wie nötig/);assert.match(p.instructions,/Erkläre die Bedeutung des Ergebnisses nur, wenn gefragt oder fachlich nötig/);assert.match(p.instructions,/Jede Teilaufgabe erhält ihre eigene vollständige/);assert.match(p.input[0].content[0].text,/Statistik/);assert.equal(p.text.format.type,'json_schema');assert.equal(p.text.format.strict,true);assert.match(p.instructions,/liefere tatsächlich mindestens ein graphs-Objekt/);return Response.json({status:incomplete?'incomplete':'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({context:decision,answer:typeof answer==='string'?{format:'not-ekran-answer-v1',sections:[{task:'Aufgabe 1)',text:answer.replace(/^Aufgabe 1\)\n/,''),graphs:[]}]}:answer})}]}]});}
   throw Error('Unexpected '+url);
  };
  const env=name=>({SUPABASE_URL:'https://project.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'private-service',NOT_KAMERA_OPENAI_API_KEY:'private-openai'})[name];
@@ -77,4 +77,35 @@ test('authenticated preview validates a real answer without replacing the device
  const s=setup();s.device.job_id='prior';s.device.delivery_id='prior-delivery';
  const r=await s.handler(req('/api/frames?preview=1',{method:'POST',body:photo(),headers:{'Content-Type':'image/png','X-Study-Profile':btoa('{"course":"Statistik"}')}}));assert.equal((await r.json()).device_queued,false);await Promise.all(s.tasks);
  assert.equal(s.jobs[0].status,'done');assert.equal(s.device.job_id,'prior');assert.equal(s.device.delivery_id,'prior-delivery');
+});
+
+
+test('original earlier photos are ordered and current page is explicitly isolated',async()=>{
+ const previous=[{job_id:'earlier-1',mime:'image/jpeg',image_base64:'b3JpZ2luYWwtMQ=='},{job_id:'earlier-2',mime:'image/png',image_base64:'b3JpZ2luYWwtMg=='}];
+ const doc={format:'not-ekran-answer-v1',sections:[{task:'Aufgabe 1) c)',text:'Y = 120.',graphs:[]}]};
+ const s=setup({previous,answer:doc,decision:{decision:'uses_previous',used_pages:[1]}});
+ const response=await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png','X-Study-Profile':btoa('{"course":"Statistik"}')}}));
+ const accepted=await response.json();assert.equal(accepted.context_pages,2);assert.equal(accepted.previous,undefined);assert(!JSON.stringify(accepted).includes('b3Jp'));await Promise.all(s.tasks);
+ const call=JSON.parse(s.calls.find(x=>x.url.endsWith('/responses')).opts.body),content=call.input[0].content;
+ const images=content.filter(x=>x.type==='input_image');assert.equal(images.length,3);assert.match(images[0].image_url,/b3JpZ2luYWwtMQ==$/);assert.match(images[1].image_url,/b3JpZ2luYWwtMg==$/);assert.match(content.at(-2).text,/AKTUELLE SEITE/);
+ assert.match(call.instructions,/Gleiche Buchstaben/);assert.match(call.instructions,/Bei einer eigenständigen Aufgabe/);assert.match(call.instructions,/Lokale neue Angaben/);assert.match(call.instructions,/Wiederhole frühere a\/b-Lösungen nicht/);assert.match(call.instructions,/keine erfundene Zahlenlösung oder Grafik/);
+ assert.equal(s.jobs[0].context_decision,'uses_previous');assert.deepEqual(s.jobs[0].context_used,[1]);assert.deepEqual(JSON.parse(s.jobs[0].answer),doc);assert(!s.jobs[0].answer.includes('used_pages'));
+});
+test('independent and missing-context decisions remain separate from the display answer',async()=>{
+ for(const decision of ['independent','missing_context']){
+  const s=setup({previous:[{mime:'image/png',image_base64:'cHJpb3I='}],decision:{decision,used_pages:[]}});
+  await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png','X-Study-Profile':btoa('{"course":"Statistik"}')}}));await Promise.all(s.tasks);assert.equal(s.jobs[0].status,'done');assert.equal(s.jobs[0].context_decision,decision);assert.deepEqual(s.jobs[0].context_used,[]);
+ }
+});
+test('invented context references never become deliverable answers',async()=>{
+ for(const decision of [{decision:'uses_previous',used_pages:[2]},{decision:'independent',used_pages:[1]},{decision:'uses_previous',used_pages:[]}]){
+  const s=setup({previous:[{mime:'image/png',image_base64:'cHJpb3I='}],decision});
+  await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png','X-Study-Profile':btoa('{"course":"Statistik"}')}}));await Promise.all(s.tasks);assert.equal(s.jobs[0].status,'error');assert.equal(s.jobs[0].answer,'');
+ }
+});
+test('reset and idempotency identity reach the atomic claim; retries do not start another model task',async()=>{
+ const s=setup({claim:{duplicate:true}}),id='83a9ff9c-3979-48e3-8b23-a13a1a30915e';
+ const result=await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png','X-Study-Profile':btoa('{"course":"Statistik"}'),'X-Request-Id':id,'X-Study-Reset':'1'}}));assert.equal(result.status,202);assert.equal(s.tasks.length,0);
+ const claim=JSON.parse(s.calls.find(x=>x.url.endsWith('/rpc/not_kamera_claim_frame')).opts.body);assert.equal(claim.p_request_id,id);assert.equal(claim.p_reset,true);assert.equal(claim.p_preview,false);assert.equal(claim.p_profile.length,64);assert.equal(claim.p_fingerprint.length,64);
+ for(const headers of [{'X-Request-Id':'wrong'},{'X-Study-Reset':'oops'}])assert.equal((await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png',...headers}}))).status,400);
 });

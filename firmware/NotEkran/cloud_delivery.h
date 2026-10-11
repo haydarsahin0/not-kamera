@@ -42,10 +42,11 @@ void cloudWorker(void*){
    lastAttempt=millis();photoUpdate("sending","Fotograf sunucuya gonderiliyor");
    http.begin(tls,String(CLOUD_API)+"/api/frames");http.addHeader("Authorization","Bearer "+token);
    http.addHeader("Content-Type","image/jpeg");http.addHeader("X-Study-Profile",photo->profile);
-   int code=http.POST(photo->image.data,photo->image.size);String id;
-   if(code==202||code==200)id=jsonField(http.getString(),"id");
+   http.addHeader("X-Request-Id",photo->requestId);http.addHeader("X-Study-Reset",photo->resetContext?"1":"0");
+   int code=http.POST(photo->image.data,photo->image.size);String id,body;
+   if(code==202||code==200){body=http.getString();id=jsonField(body,"id");}
    if(id.length()==36){
-    pendingJob=id;xSemaphoreTake(cloudLock,portMAX_DELAY);photoJob=id;xSemaphoreGive(cloudLock);
+    photoContext(body);pendingJob=id;xSemaphoreTake(cloudLock,portMAX_DELAY);photoJob=id;xSemaphoreGive(cloudLock);
     free(photo->image.data);delete photo;photo=nullptr;photoUpdate("processing","Yapay zeka cevabi hazirlaniyor");
    }else{
     String error=networkError(http,code);++attempts;

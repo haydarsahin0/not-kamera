@@ -209,7 +209,7 @@ void setup(){
  if(savedSsid.length())WiFi.begin(savedSsid.c_str(),savedPassword.c_str());
  configTime(0,0,"pool.ntp.org","time.google.com");
  xTaskCreate(cloudWorker,"cloud",24576,nullptr,1,nullptr);
- const char* requestHeaders[]={"X-CSRF","X-Study-Profile"};server.collectHeaders(requestHeaders,2);
+ const char* requestHeaders[]={"X-CSRF","X-Study-Profile","X-Study-Reset"};server.collectHeaders(requestHeaders,3);
  server.on("/",HTTP_GET,root);
  server.on("/api/cloud",HTTP_POST,[]{
   if(!mutationAllowed())return;
@@ -231,6 +231,7 @@ void setup(){
   xSemaphoreTake(cloudLock,portMAX_DELAY);
   cJSON_AddBoolToObject(doc,"paired",cloudToken.length()>0);cJSON_AddBoolToObject(doc,"busy",photoBusy);
   cJSON_AddStringToObject(doc,"state",photoState.c_str());cJSON_AddStringToObject(doc,"detail",photoDetail.c_str());
+  cJSON_AddNumberToObject(doc,"context_pages",photoContextPages);
   cJSON_AddStringToObject(doc,"cloud",cloudError.c_str());cJSON_AddStringToObject(doc,"job",photoJob.c_str());
   xSemaphoreGive(cloudLock);
   cJSON_AddBoolToObject(doc,"screen_hidden",visibility.hidden());
@@ -269,7 +270,8 @@ void setup(){
    xSemaphoreGive(cloudLock);
    if(!uploadReserved)return;
    if(u.name!="photo"||u.type!="image/jpeg"||server.header("X-Study-Profile").length()>7000){uploadError="JPEG veya ders profili gecersiz";return;}
-   uploadPhoto=new PhotoRequest();uploadPhoto->profile=server.header("X-Study-Profile");
+   if(server.header("X-Study-Reset").length()&&server.header("X-Study-Reset")!="0"&&server.header("X-Study-Reset")!="1"){uploadError="Yeni calisma secenegi gecersiz";return;}
+   uploadPhoto=new PhotoRequest();uploadPhoto->profile=server.header("X-Study-Profile");uploadPhoto->requestId=photoRequestId();uploadPhoto->resetContext=server.header("X-Study-Reset")=="1";
    uploadPhoto->image.data=(uint8_t*)ps_malloc(MAX_PHOTO_BYTES);uploadPhoto->image.capacity=MAX_PHOTO_BYTES;
    if(!uploadPhoto->image.data)uploadError="Fotograf icin bellek yetersiz";
   }else if(u.status==UPLOAD_FILE_WRITE){

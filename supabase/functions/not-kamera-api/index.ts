@@ -1,5 +1,6 @@
 // Self-contained Supabase Edge Function. Secrets never enter frontend or logs.
 import {ANSWER_SCHEMA,ANSWER_FORMAT,GRAPH_INSTRUCTIONS,validateDocument,plainAnswer,readDocument} from './answer.ts';
+import {CONTEXT_INSTRUCTIONS,PAGE_ANSWER_SCHEMA,pageInput,contextDecision} from './context.ts';
 export const MODEL = 'gpt-6.1-sol';
 export const MAX_ANSWER_BYTES = 65536;
 export const MAX_BYTES = 4 * 1024 * 1024;
@@ -50,11 +51,12 @@ async function readImage(req,type) {
 async function hash(data){const bytes=typeof data==='string'?new TextEncoder().encode(data):data;return [...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(x=>x.toString(16).padStart(2,'0')).join('');}
 function constantEqual(a,b){if(a.length!==b.length)return false;let diff=0;for(let i=0;i<a.length;i++)diff|=a.charCodeAt(i)^b.charCodeAt(i);return diff===0;}
 function imageBase64(bytes){let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(binary);}
+export function modelRequest(profile,current,previous=[]){return {model:MODEL,store:false,max_output_tokens:6000,reasoning:{effort:'medium'},instructions:STUDY_INSTRUCTIONS+'\n'+GRAPH_INSTRUCTIONS+'\n'+CONTEXT_INSTRUCTIONS,text:{format:{type:'json_schema',name:'page_answer',strict:true,schema:PAGE_ANSWER_SCHEMA}},input:pageInput(profile,current,previous)};}
 export function createHandler({env,fetcher=fetch,waitUntil}) {
  const project=env('SUPABASE_URL'),service=env('SUPABASE_SERVICE_ROLE_KEY');
  const key=env('NOT_KAMERA_OPENAI_API_KEY');let modelCache=null;
  async function rest(path,options={}) {
-  const r=await fetcher(project+'/rest/v1/'+path,{...options,headers:{apikey:service,Authorization:'Bearer '+service,'Content-Type':'application/json',Prefer:'return=representation',...options.headers},signal:AbortSignal.timeout(15000)});
+  const r=await fetcher(project+'/rest/v1/'+path,{...options,headers:{apikey:service,Authorization:'Bearer '+service,'Content-Type':'application/json',Prefer:'return=representation',...options.headers},signal:AbortSignal.timeout(30000)});
   if(!r.ok)throw new ApiError(503,'Analiz veritabanına ulaşılamadı.');
   return r.status===204?null:await r.json();
  }
@@ -77,17 +79,17 @@ export function createHandler({env,fetcher=fetch,waitUntil}) {
   return {delivery_id:delivery};
  }
  async function finish(id,body) {await rest('not_kamera_jobs?id=eq.'+encodeURIComponent(id)+'&status=eq.processing',{method:'PATCH',body:JSON.stringify(body)});}
- async function analyze(id,bytes,type,profile) {
+ async function analyze(id,bytes,type,profile,previous=[]) {
   try {
-   const r=await fetcher('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({model:MODEL,store:false,max_output_tokens:6000,reasoning:{effort:'medium'},instructions:STUDY_INSTRUCTIONS+'\n'+GRAPH_INSTRUCTIONS,text:{format:{type:'json_schema',name:'note_answer',strict:true,schema:ANSWER_SCHEMA}},input:[{role:'user',content:[{type:'input_text',text:'Bearbeite die abgebildeten Aufgaben auf Deutsch. Fachlicher Kontext und bekannte formale Vorgaben (JSON): '+JSON.stringify(profile)},{type:'input_image',image_url:'data:'+type+';base64,'+imageBase64(bytes),detail:'high'}]}]}),signal:AbortSignal.timeout(105000)});
+   const r=await fetcher('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify(modelRequest(profile,{mime:type,image_base64:imageBase64(bytes)},previous)),signal:AbortSignal.timeout(105000)});
    if(!r.ok)throw new ApiError(r.status,'OpenAI analizi başarısız (HTTP '+r.status+'). API/model erişimini ve hesap kotasını kontrol et.');
    const data=await r.json();
    if(data.status!=='completed')throw new ApiError(502,'OpenAI yanıtı tamamlanmadı. Eksik çözüm cihaza gönderilmedi.');
    const answer=(data.output||[]).filter(x=>x.type==='message').flatMap(x=>x.content||[]).filter(x=>x.type==='output_text'&&typeof x.text==='string').map(x=>x.text).join('\n\n').trim();
    if(!answer)throw new ApiError(502,'OpenAI okunabilir metin döndürmedi.');
    if(new TextEncoder().encode(answer).length>MAX_ANSWER_BYTES)throw new ApiError(502,'Cevap ekran kapasitesini aştı. Soruları daha küçük gruplar halinde gönder; metin kesilmedi.');
-   let document;try{document=validateDocument(JSON.parse(answer));}catch(e){throw new ApiError(502,'Cevap/grafik doğrulanamadı: '+e.message+' Soruyu daha küçük bölümlere ayırıp tekrar gönder.');}
-   await finish(id,{status:'done',answer:document,error:''});
+   let document,context;try{const parsed=JSON.parse(answer);context=contextDecision(parsed.context,previous.length);document=validateDocument(parsed.answer);}catch(e){throw new ApiError(502,'Cevap/grafik doğrulanamadı: '+e.message+' Soruyu daha küçük bölümlere ayırıp tekrar gönder.');}
+   await finish(id,{status:'done',answer:document,error:'',context_decision:context.decision,context_used:context.used_pages});
   } catch(e) {
    const error=e instanceof ApiError?e.message:(e.name==='TimeoutError'||e.name==='AbortError'?'Analiz zaman aşımına uğradı. Bekleyen işlemi kontrol et veya tekrar dene.':'Analiz tamamlanamadı. Bağlantıyı ve sunucu durumunu kontrol et.');
    try{await finish(id,{status:'error',answer:'',error});}catch{console.error('not-kamera: job update failed');}
@@ -99,7 +101,7 @@ export function createHandler({env,fetcher=fetch,waitUntil}) {
   if(allowed&&origin)headers['Access-Control-Allow-Origin']=origin;
   const reply=(body,status=200)=>new Response(JSON.stringify(body),{status,headers});
   if(!allowed)return reply({detail:'Bu origin için erişim yok.'},403);
-  if(req.method==='OPTIONS')return new Response(null,{status:204,headers:{...headers,'Access-Control-Allow-Methods':'GET,POST,DELETE,OPTIONS','Access-Control-Allow-Headers':'authorization,content-type,x-study-profile','Access-Control-Max-Age':'600'}});
+  if(req.method==='OPTIONS')return new Response(null,{status:204,headers:{...headers,'Access-Control-Allow-Methods':'GET,POST,DELETE,OPTIONS','Access-Control-Allow-Headers':'authorization,content-type,x-study-profile,x-study-reset,x-request-id','Access-Control-Max-Age':'600'}});
   try {
    if(!project||!service)throw new ApiError(503,'Sunucu yapılandırması eksik.');
    await authorize(req);
@@ -157,13 +159,17 @@ export function createHandler({env,fetcher=fetch,waitUntil}) {
     if(!key)throw new ApiError(503,'OpenAI API anahtarı sunucuda eksik.');
     const type=(req.headers.get('content-type')||'').split(';')[0];if(!['image/jpeg','image/png'].includes(type))throw new ApiError(415,'JPEG veya PNG gönder.');
     const profile=parseProfile(req.headers.get('x-study-profile'));const bytes=await readImage(req,type);
-    const digest=await hash((await hash(bytes))+JSON.stringify(profile)+STUDY_INSTRUCTIONS+GRAPH_INSTRUCTIONS+JSON.stringify(ANSWER_SCHEMA)+MODEL);
-    const result=await rest('rpc/not_kamera_claim',{method:'POST',body:JSON.stringify({p_digest:digest})});if(result.code)throw new ApiError(result.code,result.detail);
-    if(!result.duplicate)waitUntil(analyze(result.id,bytes,type,profile));
-    // Authenticated diagnostic analysis leaves the user's active reading intact.
     const preview=requestUrl.searchParams.get('preview')==='1';
+    const requestId=req.headers.get('x-request-id')||null;
+    if(requestId&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId))throw new ApiError(400,'Fotoğraf istek kimliği geçersiz.');
+    const reset=req.headers.get('x-study-reset')||'0';if(!['0','1'].includes(reset))throw new ApiError(400,'Yeni çalışma seçeneği geçersiz.');
+    const fingerprint=await hash((await hash(bytes))+JSON.stringify(profile)+STUDY_INSTRUCTIONS+CONTEXT_INSTRUCTIONS+GRAPH_INSTRUCTIONS+JSON.stringify(PAGE_ANSWER_SCHEMA)+MODEL+(preview?'preview':'live'));
+    const result=await rest('rpc/not_kamera_claim_frame',{method:'POST',body:JSON.stringify({p_fingerprint:fingerprint,p_profile:await hash(JSON.stringify(profile)),p_image:imageBase64(bytes),p_mime:type,p_request_id:requestId,p_reset:reset==='1',p_preview:preview})});if(result.code)throw new ApiError(result.code,result.detail);
+    const {previous=[],...publicResult}=result;
+    if(!result.duplicate)waitUntil(analyze(result.id,bytes,type,profile,previous));
+    // Diagnostic analysis never changes the working page context or device mailbox.
     if(!preview)await selectDevice(result.id);
-    return reply({...result,device_queued:!preview},202);
+    return reply({...publicResult,device_queued:!preview},202);
    }
    throw new ApiError(404,'Adres bulunamadı.');
   } catch(e){return reply({detail:e instanceof ApiError?e.message:'Sunucu isteği tamamlanamadı.'},e instanceof ApiError?e.status:503);}

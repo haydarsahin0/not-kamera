@@ -24,6 +24,7 @@ function harness({paired=true,hash='',hidden=false}={}){
  assert(h.calls.some(x=>x.url==='/api/photo'));assert.match(h.node('notice').textContent,/Fotoğraf cihaz tarafından alındı/);assert.equal(h.node('file').disabled,true);
  await h.node('file').onchange();assert.equal(h.calls.filter(x=>x.url==='/api/photo').length,1); // no duplicate while queued
  h.done();await vm.runInContext('refresh()',h.ctx);assert.match(h.node('screenStatus').textContent,/3 sayfa/);assert.equal(h.node('file').disabled,false);
+ h.node('newStudy').onclick();assert.match(h.node('contextStatus').textContent,/kullanılmadan/);h.node('file').files=[{size:100}];await h.node('file').onchange();const last=h.calls.filter(x=>x.url==='/api/photo').at(-1);assert.equal(last.opts.headers['X-Study-Reset'],'1');assert.match(h.node('newStudy').textContent,/Sonraki fotoğraf/);h.done();await vm.runInContext('refresh()',h.ctx);assert.match(h.node('newStudy').textContent,/Yeni çalışma başlat/);
  const token='s'.repeat(48),setup=Buffer.from(JSON.stringify({url:'https://jckoovsocynnxbrsalld.supabase.co/functions/v1/not-kamera-api',token})).toString('base64');
  const offline=harness({paired:false,hash:'#setup='+setup});await new Promise(resolve=>setImmediate(resolve));
  assert.equal(offline.calls[0].url,'/api/cloud');assert.equal(offline.calls[0].opts.body.get('token'),token);assert.equal(offline.ctx.location.hash,'');assert(!offline.calls.some(x=>x.url.startsWith('https:')));

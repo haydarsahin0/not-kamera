@@ -1,0 +1,26 @@
+import {ANSWER_SCHEMA} from './answer.ts';
+export const MAX_CONTEXT_PAGES=6;
+export const CONTEXT_INSTRUCTIONS=`Die Bilder sind chronologisch beschriftet. Nur das letzte Bild AKTUELLE SEITE enthält den jetzt zu bearbeitenden Auftrag. Frühere Bilder sind optionale Originalquellen, keine zusätzlich zu beantwortenden Aufträge und keine bisherigen Musterlösungen.
+Entscheide für jede aktuelle Teilaufgabe intern, ob sie eigenständig lösbar ist oder Angaben einer früheren Seite benötigt. Prüfe Aufgabenüberschrift/-nummer, gemeinsame Einleitung, Modell, Variablen, Parameter, Einheiten und Verweise wie „mit den Ergebnissen aus a/b“ oder „Fortsetzung“. Gleiche Buchstaben a/b/c/d, ähnliche Themen oder identische Variablennamen allein beweisen keinen Zusammenhang. Auch eine unnummerierte Fortsetzung darf anhand einer eindeutigen gemeinsamen Aufgabenstellung zugeordnet werden. Erfinde keine übergeordnete Aufgabennummer.
+Bei einer eigenständigen Aufgabe verwende ausschließlich deren Angaben; übernimm keine alten Werte oder Annahmen. Bei einer eindeutig zusammengehörigen Fortsetzung übernimm nur die benötigten Originalangaben der zugehörigen früheren Seite. Berechne nötige Zwischenergebnisse aus diesen Originalangaben erneut und prüfe sie. Lokale neue Angaben, ausdrücklich geänderte Parameter oder neue Szenarien haben Vorrang. Eine aktuelle Seite kann zugleich abhängige und unabhängige Aufgaben enthalten: trenne ihre Datengrundlagen strikt.
+Beantworte nur Aufgaben auf AKTUELLE SEITE. Wiederhole frühere a/b-Lösungen nicht, wenn jetzt nur c/d gezeigt werden. Eine überlappende frühere Textstelle dient nur als Kontext. Wenn die aktuelle Seite lediglich Angaben ohne Arbeitsauftrag zeigt, bestätige knapp die erkannten Angaben, ohne zusätzliche Aufgaben zu erfinden.
+Bei einer verlangten Grafik liefere das echte graphs-Objekt mit den passenden Werten der richtigen Aufgabe; beschreibe die Grafik nicht bloß im Text. Unlesbare, fehlende, widersprüchliche oder nicht eindeutig zuordenbare Voraussetzungen niemals durch alte Werte einer anderen Aufgabe ersetzen. Nenne knapp, welche Angabe fehlt; keine erfundene Zahlenlösung oder Grafik.
+Gib die Abhängigkeitsentscheidung nur im separaten Feld context zurück, nicht als zusätzliche Erklärung auf dem Display. used_pages enthält ausschließlich die Nummern tatsächlich benutzter FRÜHERER SEITEN (1-basiert), nie die aktuelle Seite. decision ist independent, wenn keine frühere Seite gebraucht wird; uses_previous bei eindeutig genutztem vorherigem Kontext; missing_context, wenn notwendige Voraussetzungen fehlen oder ihre Zuordnung unklar ist. Die äußere JSON-Struktur hat nur context und answer. Innerhalb von answer stehen format="not-ekran-answer-v1" und sections gemäß den Grafikregeln. answer bleibt die knappe schriftliche Lösung im geforderten Anzeigeformat.`;
+export const PAGE_ANSWER_SCHEMA={type:'object',additionalProperties:false,required:['context','answer'],properties:{
+ context:{type:'object',additionalProperties:false,required:['decision','used_pages'],properties:{decision:{type:'string',enum:['independent','uses_previous','missing_context']},used_pages:{type:'array',maxItems:MAX_CONTEXT_PAGES,items:{type:'integer',minimum:1,maximum:MAX_CONTEXT_PAGES}}}},
+ answer:ANSWER_SCHEMA
+}};
+export function pageInput(profile,current,previous){
+ if(!Array.isArray(previous)||previous.length>MAX_CONTEXT_PAGES)throw Error('Sayfa bağlamı sınırı aşıldı.');
+ const content=[{type:'input_text',text:'Bearbeite nur AKTUELLE SEITE auf Deutsch. Fachlicher Kontext und bekannte formale Vorgaben (JSON): '+JSON.stringify(profile)}];
+ for(const [i,page] of previous.entries()){
+  if(!['image/jpeg','image/png'].includes(page.mime)||typeof page.image_base64!=='string'||page.image_base64.length>5592408)throw Error('Önceki sayfa görüntüsü geçersiz.');
+  content.push({type:'input_text',text:'FRÜHERE SEITE '+(i+1)+' — nur optionale Originalangaben, kein aktueller Auftrag.'},{type:'input_image',image_url:'data:'+page.mime+';base64,'+page.image_base64,detail:'high'});
+ }
+ content.push({type:'input_text',text:'AKTUELLE SEITE — beantworte ausschließlich die hier sichtbaren Aufgaben. '+previous.length+' frühere Originalseiten stehen bei Bedarf zur Verfügung.'},{type:'input_image',image_url:'data:'+current.mime+';base64,'+current.image_base64,detail:'high'});
+ return [{role:'user',content}];
+}
+export function contextDecision(value,count){
+ if(!value||!['independent','uses_previous','missing_context'].includes(value.decision)||!Array.isArray(value.used_pages)||value.used_pages.length>count||new Set(value.used_pages).size!==value.used_pages.length||value.used_pages.some(n=>!Number.isInteger(n)||n<1||n>count)||value.decision==='independent'&&value.used_pages.length||value.decision==='uses_previous'&&!value.used_pages.length)throw Error('Sayfa bağlantısı doğrulanamadı.');
+ return value;
+}

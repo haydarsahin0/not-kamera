@@ -1,8 +1,10 @@
-# Not Ekran V2 — 0.9.1
+# Not Ekran V2 — 0.10.0
 
-## 0.9.1: yerel fotoğraf sayfasının sürüm düzeltmesi
+## 0.10.0: önceki sayfalara koşullu bağlantı
 
-Fotoğraf sayfasındaki sabit 0.8.0 etiketi kaldırıldı. `firmware_version.h` yerel ana sayfa, `/camera`, `/api/cloud`, `/api/photo/status` ve derleme metadata sürümünün tek kaynağıdır. Fotoğraf sayfası canlı durum yanıtından da sürümünü günceller. Yerel sayfanın yeni sürümü cihazın kendisine USB ile yüklendikten sonra görünür; yalnız GitHub sayfasını yenilemek cihaz yazılımını değiştirmez. Geçmiş, otomatik sayfa geçişi ve bağlantı davranışı aynıdır.
+Her fotoğraf tek istek UUID’siyle gönderilir; aynı upload’ın ağ yeniden denemeleri aynı kimliği taşır. Yeni çalışma seçimi `X-Study-Reset` olarak fotoğrafla birlikte internete çıkana kadar kuyrukta korunur. Supabase son 7 orijinal fotoğrafı özel erişimle tutar, yeni soruya en fazla 6 önceki başarılı sayfayı gönderir. Model bağımsız/önceki veriye bağlı/eksik bağlam kararını ayrı JSON alanında verir; bu alan cihaz cevabına dahil edilmez. Kullanıcıdan her fotoğrafta bağlantı seçmesi istenmez. Profil değişimi, yeni çalışma veya 2 saatlik aradan sonra gelen yeni analiz eski bağlamı temizler. Yenileme cihazdaki cevap geçmişini silmez.
+
+Modelin bağlantı kararının her soruda doğru olması garanti edilemez. Hafızadaki 6 önceki fotoğraf dışında kalan veya okunamayan değerler için eksik bilgi belirtilir; sayısal sonuç uydurulmaması istenir. Yerel arayüz USB ile firmware yüklendikten sonra güncellenir.
 
 ## 0.9.0: cevap geçmişi, güç kesintisinden sonra devam, soru başlıkları
 
@@ -67,7 +69,7 @@ Aşağıdaki fotoğraf aktarım yolu 0.5.0 ile aynıdır.
 
 ## Tek iPhone, yalnızca cihaz sayfası
 
-1. USB ile 0.9.1 yazılımını yükle. Silme seçeneğini kapalı bırak: Wi-Fi ve uygulama eşleştirmesi NVS’den korunur.
+1. USB ile 0.10.0 yazılımını yükle. Silme seçeneğini kapalı bırak: Wi-Fi ve uygulama eşleştirmesi NVS’den korunur.
 2. NotEkran ağına bağlanıp `http://192.168.4.1/camera` aç. Yerel kullanıcı `admin`; şifre cihazın bağlantı ekranındaki koddur. Önceki eşleştirme otomatik okunur. OpenAI anahtarı girilmez veya cihaz tarafından indirilmez; yalnızca Supabase fonksiyonu bu anahtarı kullanır.
 3. Fotoğrafı çek/seç. Sayfa JPEG’e küçültüp CSRF korumalı multipart POST ile **yerel cihaza** yükler. Hiçbir tarayıcı isteği buluta gitmez.
 4. “Fotoğraf cihaz tarafından alındı” mesajından sonra NotEkran ağından çıkıp iPhone kişisel erişim noktasını aç. Cihaz önceden kaydedilen ağa tekrar bağlanır, saati NTP ile doğrular, TLS üzerinden fotoğrafı Supabase’e gönderir.
