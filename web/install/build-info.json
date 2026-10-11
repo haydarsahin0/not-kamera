@@ -1,10 +1,10 @@
 {
-  "version": "0.9.0",
+  "version": "0.9.1",
   "board": "Waveshare ESP32-S3-ePaper-1.54 V2",
   "arduino_esp32": "3.3.0",
   "gfx": "1.12.1",
-  "bytes": 1399248,
-  "sha256": "d14b6a11050c689352775419385e4e6498197e0db952ca2c12a8f0fdf4760eff",
+  "bytes": 1399568,
+  "sha256": "d2ac054286f2a7141613eb55a1b1c90891f86c577c86950425dd648269a36008",
   "offset": 65536,
   "parts": [
     {
@@ -28,8 +28,8 @@
     {
       "path": "not-ekran-v2.bin",
       "offset": 65536,
-      "bytes": 1399248,
-      "sha256": "d14b6a11050c689352775419385e4e6498197e0db952ca2c12a8f0fdf4760eff"
+      "bytes": 1399568,
+      "sha256": "d2ac054286f2a7141613eb55a1b1c90891f86c577c86950425dd648269a36008"
     }
   ],
   "hardware_tested": false

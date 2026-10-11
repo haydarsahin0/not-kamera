@@ -5,7 +5,7 @@ from pathlib import Path
 root = Path(__file__).resolve().parents[2] / 'web/install'
 manifest = json.loads((root / 'manifest.json').read_text())
 info = json.loads((root / 'build-info.json').read_text())
-assert manifest['version'] == info['version'] == '0.9.0'
+assert manifest['version'] == info['version'] == '0.9.1'
 assert info['offset'] == 0x10000 and info['hardware_tested'] is False
 parts = manifest['builds'][0]['parts']
 assert len(parts) == len(info['parts']) == 4
@@ -16,7 +16,7 @@ protected = [(0x9000, 0xe000), (0x670000, 0x7f0000)]
 before = [bytes(flash[a:b]) for a, b in protected]
 for part, expected in zip(parts, info['parts']):
     path, _, query = part['path'].partition('?')
-    assert query == 'v=0.9.0' and path == expected['path']
+    assert query == 'v='+info['version'] and path == expected['path']
     offset = part['offset']
     data = (root / path).read_bytes()
     assert offset == expected['offset'] and len(data) == expected['bytes']

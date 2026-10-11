@@ -1,10 +1,11 @@
 """Reproducible local build. Install dependencies listed in firmware/README.md first."""
-import hashlib,json,os,pathlib,subprocess,sys
+import hashlib,json,os,pathlib,re,subprocess,sys
 root=pathlib.Path(__file__).resolve().parents[2]
 fw=root/'firmware'
 out=root/'web'/'install'
 build=fw/'build'
 cli=os.environ.get('ARDUINO_CLI','arduino-cli')
+version=re.search(r'FIRMWARE_VERSION="([0-9.]+)"',(fw/'NotEkran/firmware_version.h').read_text()).group(1)
 subprocess.run([sys.executable,str(fw/'tools'/'prepare_driver.py')],check=True)
 subprocess.run([sys.executable,str(fw/'tools'/'prepare_ui.py')],check=True)
 fqbn='esp32:esp32:esp32s3:FlashSize=8M,PSRAM=opi,PartitionScheme=default_8MB,USBMode=hwcdc,CDCOnBoot=cdc'
@@ -27,10 +28,10 @@ for name,offset,blob in parts:
         assert erase_end<=start or erase_start>=end,'Protected data would be erased'
     (out/name).write_bytes(blob)
     metadata.append({'path':name,'offset':offset,'bytes':len(blob),'sha256':hashlib.sha256(blob).hexdigest()})
-manifest={'name':'Not Ekran V2','version':'0.9.0','new_install_prompt_erase':True,'new_install_improv_wait_time':0,
-          'builds':[{'chipFamily':'ESP32-S3','improv':False,'parts':[{'path':p['path']+'?v=0.9.0','offset':p['offset']} for p in metadata]}]}
+manifest={'name':'Not Ekran V2','version':version,'new_install_prompt_erase':True,'new_install_improv_wait_time':0,
+          'builds':[{'chipFamily':'ESP32-S3','improv':False,'parts':[{'path':p['path']+'?v='+version,'offset':p['offset']} for p in metadata]}]}
 (out/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
-meta={'version':'0.9.0','board':'Waveshare ESP32-S3-ePaper-1.54 V2','arduino_esp32':'3.3.0','gfx':'1.12.1',
+meta={'version':version,'board':'Waveshare ESP32-S3-ePaper-1.54 V2','arduino_esp32':'3.3.0','gfx':'1.12.1',
       'bytes':len(app),'sha256':hashlib.sha256(app).hexdigest(),'offset':65536,'parts':metadata,'hardware_tested':False}
 (out/'build-info.json').write_text(json.dumps(meta,indent=2)+'\n')
 print(json.dumps(meta,indent=2))

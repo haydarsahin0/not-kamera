@@ -11,6 +11,7 @@ async function device(path,options={}){
 function profileHeader(){const p={course:$('course').value.trim(),rules:$('rules').value.trim()};try{sessionStorage.setItem('not-study-profile',JSON.stringify(p))}catch{}return btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(p))));}
 async function refresh(){
  try{const state=await device('/api/photo/status');paired=state.paired;busy=state.busy||uploading;
+ if(typeof state.version==='string')$('firmwareVersion').textContent=state.version;
  $('settings').open=!paired;$('connection').textContent=(paired?'Eşleştirme kayıtlı. ':'Eşleştirme gerekli. ')+(state.wifi?'Wi-Fi bağlı. ':'İnternet Wi-Fi bağlantısı bekleniyor. ')+'Bulut: '+state.cloud;
  if(state.healthy===false){$('screenStatus').textContent='Ekran sürücüsü hata bildirdi; aktarım tamamlandı sayılmadı.';notice('Ekran yanıt vermiyor. Cihazı ve V2 sürümünü kontrol et.',true);}
  else if(state.screen_hidden){$('screenStatus').textContent='Ekran kapalı; pil göstergesi açık. PWR tuşuna kısa basınca kaldığın sayfa açılır; yeni cevap varsa açıldıktan sonra ekrana alınır.';notice(state.busy?'Fotoğraf işlemi sürüyor; cevabı göstermek için PWR ile ekranı aç.':'Ekran kapalı; okuma sayfası korunuyor.');}

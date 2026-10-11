@@ -15,6 +15,7 @@
 #include "answer_document.h"
 #include "battery_view.h"
 #include "history_files.h"
+#include "firmware_version.h"
 
 // Waveshare ESP32-S3-ePaper-1.54 V2 only. GPIOs from vendor V2 examples.
 constexpr int EPD_POWER=6, AUDIO_POWER=42, BATTERY_HOLD=17, BOOT_KEY=0, PWR_KEY=18;
@@ -72,7 +73,7 @@ String formStart(const char* action){return String("<form method='post' action='
 void root(){
  if(!authorized())return;
  String h=R"HTML(<!doctype html><html lang="tr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Not Ekran</title><style>
- body{font:17px system-ui;background:#f0f4f8;color:#173044;max-width:620px;margin:auto;padding:22px}h1{margin-bottom:6px}section{background:white;border-radius:18px;padding:20px;margin:18px 0}label{display:block;margin:12px 0}input,textarea,select,button{font:inherit;box-sizing:border-box;width:100%;padding:12px;border:1px solid #b9cbd6;border-radius:9px}textarea{min-height:170px}button{background:#185ed2;color:white;border:0;margin:8px 0;cursor:pointer}small{display:block;line-height:1.5;color:#526b7c}.buttons{display:flex;gap:8px}.buttons form{flex:1}code{overflow-wrap:anywhere}a{color:#185ed2}</style><h1>Not Ekran</h1><small>V2 · 0.9.0 · Metin ve fotoğraf</small><section><strong>Bağlantı</strong><p>)HTML";
+ body{font:17px system-ui;background:#f0f4f8;color:#173044;max-width:620px;margin:auto;padding:22px}h1{margin-bottom:6px}section{background:white;border-radius:18px;padding:20px;margin:18px 0}label{display:block;margin:12px 0}input,textarea,select,button{font:inherit;box-sizing:border-box;width:100%;padding:12px;border:1px solid #b9cbd6;border-radius:9px}textarea{min-height:170px}button{background:#185ed2;color:white;border:0;margin:8px 0;cursor:pointer}small{display:block;line-height:1.5;color:#526b7c}.buttons{display:flex;gap:8px}.buttons form{flex:1}code{overflow-wrap:anywhere}a{color:#185ed2}</style><h1>Not Ekran</h1><small>V2 · __FIRMWARE_VERSION__ · Metin ve fotoğraf</small><section><strong>Bağlantı</strong><p>)HTML";
  h+=WiFi.status()==WL_CONNECTED?"Wi-Fi bağlı. Yerel adres: <code>http://"+WiFi.localIP().toString()+"</code>":"Wi-Fi bağlı değil. Cihazın kendi ağı üzerinden kullanabilirsin.";
  if(!panel->healthy)h+="<p><strong>Ekran yanıt vermedi. Kurulumu durdur; V2 kartı ve bağlantıyı kontrol et.</strong></p>";
  h+="</p><small>Kurulum ağı: "+htmlEscape(apName)+" · http://192.168.4.1<br>Sayfa "+String(currentPage+1)+" / "+String(pageCount());
@@ -93,7 +94,7 @@ void root(){
  h+="<label>Ağ adı<input name='ssid' maxlength='32' required value='"+htmlEscape(savedSsid)+"' autocomplete='off'></label>";
  h+=R"HTML(<label>Ağ şifresi<input name="password" type="password" minlength="8" maxlength="63" required autocomplete="new-password"></label><button>Kaydet ve bağlan</button><small>2,4 GHz, kişisel şifreli ağ kullan. iPhone erişim noktasında gerekirse “Uyumluluğu En Üst Düzeye Çıkar” seçeneğini aç. eduroam ve giriş sayfalı ağlar bu sürümde desteklenmez. Şifre yanlışsa cihazın kendi ağı açık kalır. Bağlanmayı denedikten sonra bu sayfayı yenile.</small></form></section><small>BOOT: tek basış sonraki, çift basış önceki sayfa; 3 saniye basılı tut: bağlantı bilgileri. PWR kısa basış: pil ekranı/okuma; aynı sayfa korunur. USB'yi takarken BOOT'a basılı tutma; bu yükleme moduna geçirir. Yalnızca güvendiğin yerel ağda kullan; bu HTTP arayüzünü internete açma.</small></html>)HTML";
  server.sendHeader("Cache-Control","no-store");server.sendHeader("X-Frame-Options","DENY");
- server.send(200,"text/html; charset=utf-8",h);
+ h.replace("__FIRMWARE_VERSION__",FIRMWARE_VERSION);server.send(200,"text/html; charset=utf-8",h);
 }
 void savePaintedPosition(){
  lastSaveRetry=millis();
@@ -215,18 +216,18 @@ void setup(){
   String token=server.arg("token");
   if(!token.isEmpty()&&!validCloudToken(token)){server.send(400,"application/json","{\"detail\":\"Erisim kodu gecersiz.\"}");return;}
   prefs.putString("cloud-token",token);cloudSetToken(token);
-  server.send(200,"application/json","{\"saved\":true,\"version\":\"0.9.0\"}");
+  server.send(200,"application/json",String("{\"saved\":true,\"version\":\"")+FIRMWARE_VERSION+"\"}");
  });
  server.on("/camera",HTTP_GET,[]{
   if(!authorized())return;
   String h=FPSTR(CAMERA_PAGE);h.replace("__CSRF__",csrf);
   server.sendHeader("Cache-Control","no-store");server.sendHeader("X-Frame-Options","DENY");
-  server.send(200,"text/html; charset=utf-8",h);
+  h.replace("__FIRMWARE_VERSION__",FIRMWARE_VERSION);server.send(200,"text/html; charset=utf-8",h);
  });
 
  server.on("/api/photo/status",HTTP_GET,[]{
   if(!authorized())return;
-  cJSON* doc=cJSON_CreateObject();
+  cJSON* doc=cJSON_CreateObject();cJSON_AddStringToObject(doc,"version",FIRMWARE_VERSION);
   xSemaphoreTake(cloudLock,portMAX_DELAY);
   cJSON_AddBoolToObject(doc,"paired",cloudToken.length()>0);cJSON_AddBoolToObject(doc,"busy",photoBusy);
   cJSON_AddStringToObject(doc,"state",photoState.c_str());cJSON_AddStringToObject(doc,"detail",photoDetail.c_str());
