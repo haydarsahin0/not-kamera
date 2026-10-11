@@ -2,22 +2,22 @@ import {GLYPH_METRICS} from './font-metrics.ts';
 import {mathText} from './math-text.ts';
 export const ANSWER_FORMAT='not-ekran-answer-v1';
 const object=properties=>({type:'object',properties,required:Object.keys(properties),additionalProperties:false});
-const string={type:'string'},number={type:'number'},point=object({x:number,y:number});
-const array=items=>({type:'array',items});
-const curve=object({label:string,points:array(point),label_at:point,dashed:{type:'boolean'}});
-const graph=object({title:string,x_label:string,y_label:string,curves:array(curve),points:array(object({label:string,at:point})),arrows:array(object({from:point,to:point})),x_ticks:array(object({label:string,value:number})),y_ticks:array(object({label:string,value:number}))});
-export const ANSWER_SCHEMA=object({format:{type:'string',enum:[ANSWER_FORMAT]},sections:array(object({task:string,text:string,graphs:array(graph)}))});
+const string={type:'string'},number={type:'number',minimum:0,maximum:100},point=object({x:number,y:number});
+const array=(items,minItems,maxItems)=>({type:'array',items,minItems,maxItems});
+const curve=object({label:string,points:array(point,2,24),label_at:point,dashed:{type:'boolean'}});
+const graph=object({title:string,x_label:string,y_label:string,curves:array(curve,1,3),points:array(object({label:string,at:point}),0,3),arrows:array(object({from:point,to:point}),0,3),x_ticks:array(object({label:string,value:number}),0,3),y_ticks:array(object({label:string,value:number}),0,3)});
+export const ANSWER_SCHEMA=object({format:{type:'string',enum:[ANSWER_FORMAT]},sections:array(object({task:string,text:string,graphs:array(graph,0,4)}),1,24)});
 export const GRAPH_INSTRUCTIONS=`Gib die Lösung ausschließlich im vorgegebenen JSON-Schema aus, format="${ANSWER_FORMAT}". sections steht in Aufgabenreihenfolge; task enthält z.B. "Aufgabe 1) a)" und text nur die kurze fachliche Lösung, ohne wiederholte Überschrift. Wenn eine Zeichnung, Skizze oder grafische Darstellung verlangt wird, liefere tatsächlich mindestens ein graphs-Objekt; ersetze die verlangte Zeichnung niemals nur durch einen Text. Bei reinen Text-/Rechenfragen ist graphs leer. Ist eine Grafik wegen unlesbarer Angaben nicht bestimmbar, benenne dies knapp statt eine Grafik zu erfinden.
 Ein graphs-Objekt ist eine fachliche 2D-Zeichnung für ein monochromes 200x200-Display. x und y sind normierte Positionen von 0 bis 100, y wächst nach oben. Diese Positionen sind NICHT die fachlichen Zahlenwerte. Setze konkrete Zahlenwerte nur als x_ticks/y_ticks-Labels. Wähle einen konsistenten Maßstab, bei mehreren Darstellungen desselben Zustands denselben Maßstab. Verwechsle relative Diagrammpositionen nicht mit Einheiten oder Ergebnissen. Bei rein qualitativen Aufgaben keine erfundenen Zahlenwerte. Beschrifte die Achsen mit kurzen Variablen wie Y, i, P, pi. Bei negativen Werten verschiebe den Nullpunkt passend und markiere ihn durch Ticks.
 Pro Diagramm höchstens 3 Kurven, 3 markierte Punkte, 3 Pfeile und 3 Ticks je Achse. Für komplexere Darstellungen nutze mehrere klar betitelte Diagramme; kürze keine geforderte Kurve oder Teilaufgabe weg. Insgesamt höchstens 12 Diagramme, 4 je Abschnitt, 24 Abschnitte. Kurven bestehen aus 2–24 Punkten; gerade Linien aus 2 Punkten, gekrümmte Linien aus einigen Stützpunkten. label_at liegt auf der zugehörigen Kurve, möglichst fern von anderen Labels. Verwende kurze lesbare Kurven-/Punktlabels mit höchstens 5 Zeichen, z.B. IS₀, IS₁, LM, E₀, E₁. Benutze bei vielen Namen kurze Kürzel und erkläre sie knapp in text. Keine abgeschnittenen oder versteckten Beschriftungen. Punkte und Kurven müssen fachlich zusammenpassen: Gleichgewichte liegen auf den zutreffenden Schnittpunkten; Verschiebungen zeigen die richtige Richtung. Prüfe dies intern.
-Platziere Punktlabels und Kurvenanker mit genügend Abstand; markierte Punkte liegen möglichst zwischen 10 und 90. Alte Kurven dürfen gestrichelt sein (dashed=true), neue durchgezogen. Pfeile from->to stellen nur gefragte Bewegungen/Verschiebungen dar. Ticks sind optional; y_ticks-Labels höchstens 2 Zeichen und 22 Positionseinheiten voneinander entfernt, x_ticks-Labels höchstens 3 Zeichen und 34 Positionseinheiten voneinander entfernt. Keine dichten Zahlenreihen. Titel kurz und eindeutig (z.B. "IS-LM: G steigt"). Keine LaTeX-Strings, Markdown, ASCII-Bilder oder SVG-Code. Beschreibe im Text nur die verlangte Begründung oder notwendige Zeichnungserklärung; eine echte Grafik wird durch die Zeicheninformationen erstellt.`;
+Platziere Punktlabels und Kurvenanker mit genügend Abstand; markierte Punkte liegen möglichst zwischen 10 und 90. Alte Kurven dürfen gestrichelt sein (dashed=true), neue durchgezogen. Pfeile from->to stellen nur gefragte Bewegungen/Verschiebungen dar. Ticks sind optional; y_ticks-Labels höchstens 2 Zeichen und 22 Positionseinheiten voneinander entfernt, x_ticks-Labels höchstens 3 Zeichen und 34 Positionseinheiten voneinander entfernt. Keine dichten Zahlenreihen. Lange konkrete Zahlenwerte dürfen mit kurzen Tick-Kürzeln (z.B. y1) und einer eindeutigen Legende in text angegeben werden; Werte niemals abschneiden oder verändern. Falls Ticks zu dicht sind, zeige mehrere Diagramme mit identischen Kurven und identischem Maßstab, jedes mit einer gut lesbaren Teilmenge der Ticks; sämtliche geforderten Werte bleiben erhalten. Titel kurz und eindeutig (z.B. "IS-LM: G steigt"). Keine LaTeX-Strings, Markdown, ASCII-Bilder oder SVG-Code. Beschreibe im Text nur die verlangte Begründung oder notwendige Zeichnungserklärung; eine echte Grafik wird durch die Zeicheninformationen erstellt.`;
 
 export function labelWidth(s){let x=0,extent=0;for(const ch of s.normalize('NFC')){const g=GLYPH_METRICS[ch.codePointAt(0)];if(!g)throw Error('Nicht unterstütztes Grafikzeichen.');extent=Math.max(extent,x+g[1]+g[2]);x+=g[0];}return Math.max(x,extent);}
-const fail=()=>{throw Error('Grafikdaten sind ungültig oder auf dem kleinen Display nicht lesbar.');};
+const fail=(reason='structure')=>{throw Error('Grafik düzeni doğrulanamadı ('+reason+').');};
 function text(s,max,empty=true){if(typeof s!=='string')fail();s=mathText(s);if(new TextEncoder().encode(s).length>max||s.includes('\0')||(!empty&&!s.trim()))fail();return s;}
-function label(s,max){s=text(s,48,false);if(/[\r\n\t]/.test(s)||labelWidth(s)>max)fail();return s;}
-function list(a,min,max){if(!Array.isArray(a)||a.length<min||a.length>max)fail();return a;}
-function coordinate(n){if(typeof n!=='number'||!Number.isFinite(n)||n<0||n>100)fail();return n;}
+function label(s,max){s=text(s,48,false);if(/[\r\n\t]/.test(s))fail('label_control');if(labelWidth(s)>max)fail('label_width_'+max);return s;}
+function list(a,min,max){if(!Array.isArray(a)||a.length<min||a.length>max)fail('items_'+min+'_'+max);return a;}
+function coordinate(n){if(typeof n!=='number'||!Number.isFinite(n)||n<0||n>100)fail('coordinate_0_100');return n;}
 function position(p){if(!p||typeof p!=='object')fail();coordinate(p.x);coordinate(p.y);return p;}
 const px=x=>34+Math.round(x*140/100),py=y=>145-Math.round(y*97/100);
 function collision(a,b){return a.x<b.x+b.w+3&&a.x+a.w+3>b.x&&a.y<b.y+b.h+3&&a.y+a.h+3>b.y;}
@@ -35,12 +35,12 @@ export function validateDocument(doc){
    if(++total>12)fail();g.title=text(g.title,160,false);g.x_label=label(g.x_label,90);g.y_label=label(g.y_label,90);
    for(const c of list(g.curves,1,3)){c.label=label(c.label,64);position(c.label_at);list(c.points,2,24).forEach(position);if(typeof c.dashed!=='boolean')fail();
     // A label anchor belongs on its curve, not on an unrelated diagram area.
-    let distance=Infinity;for(let i=1;i<c.points.length;i++){let a=c.points[i-1],b=c.points[i],dx=b.x-a.x,dy=b.y-a.y,t=Math.max(0,Math.min(1,((c.label_at.x-a.x)*dx+(c.label_at.y-a.y)*dy)/(dx*dx+dy*dy||1)));distance=Math.min(distance,Math.hypot(c.label_at.x-a.x-t*dx,c.label_at.y-a.y-t*dy));}if(distance>4)fail();
+    let distance=Infinity;for(let i=1;i<c.points.length;i++){let a=c.points[i-1],b=c.points[i],dx=b.x-a.x,dy=b.y-a.y,t=Math.max(0,Math.min(1,((c.label_at.x-a.x)*dx+(c.label_at.y-a.y)*dy)/(dx*dx+dy*dy||1)));distance=Math.min(distance,Math.hypot(c.label_at.x-a.x-t*dx,c.label_at.y-a.y-t*dy));}if(distance>4)fail('curve_anchor');
    }
    for(const m of list(g.points,0,3)){m.label=label(m.label,64);position(m.at);}
-   for(const a of list(g.arrows,0,3)){position(a.from);position(a.to);if(a.from.x===a.to.x&&a.from.y===a.to.y)fail();}
-   for(const [ticks,max,gap] of [[g.x_ticks,42,34],[g.y_ticks,26,22]]){list(ticks,0,3);for(let i=0;i<ticks.length;i++){ticks[i].label=label(ticks[i].label,max);coordinate(ticks[i].value);if(ticks.slice(0,i).some(t=>Math.abs(t.value-ticks[i].value)<gap))fail();}}
-   const boxes=g.points.map(m=>({x:px(m.at.x)-4,y:py(m.at.y)-4,w:9,h:9}));g.points.forEach((m,i)=>{if(!place(m.label,m.at,boxes,g.curves)&&!place('E'+(i+1),m.at,boxes,g.curves))fail();});g.curves.forEach((c,i)=>{if(!place(c.label,c.label_at,boxes,g.curves)&&!place('C'+(i+1),c.label_at,boxes,g.curves))fail();});
+   for(const a of list(g.arrows,0,3)){position(a.from);position(a.to);if(a.from.x===a.to.x&&a.from.y===a.to.y)fail('zero_arrow');}
+   for(const [ticks,max,gap] of [[g.x_ticks,42,34],[g.y_ticks,26,22]]){list(ticks,0,3);for(let i=0;i<ticks.length;i++){ticks[i].label=label(ticks[i].label,max);coordinate(ticks[i].value);if(ticks.slice(0,i).some(t=>Math.abs(t.value-ticks[i].value)<gap))fail('tick_gap_'+gap);}}
+   const boxes=g.points.map(m=>({x:px(m.at.x)-4,y:py(m.at.y)-4,w:9,h:9}));g.points.forEach((m,i)=>{if(!place(m.label,m.at,boxes,g.curves)&&!place('E'+(i+1),m.at,boxes,g.curves))fail('point_layout');});g.curves.forEach((c,i)=>{if(!place(c.label,c.label_at,boxes,g.curves)&&!place('C'+(i+1),c.label_at,boxes,g.curves))fail('curve_layout');});
   }
  }
  const s=JSON.stringify(doc);if(new TextEncoder().encode(s).length>65536)throw Error('Cevap ekran kapasitesini aştı; metin kesilmedi.');return s;

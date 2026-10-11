@@ -1,12 +1,20 @@
 # Not Kamera sunucu kodu
 
+## Grafik düzeni düzeltmesi (0.10.1 cihazıyla uyumlu)
+
+Sunucu uzun eksen, eğri, nokta ve sayı etiketlerini kısa kodlarla gösterir; tam ad/değer açıklama anahtarında korunur. Yakın eksen işaretleri aynı eğriler ve aynı ölçekte ayrı grafik sayfalarına bölünür. Etiket bağlantı ucu kendi eğrisine taşınabilir; eğriler, noktalar ve sayısal sonuçlar değiştirilmez. Cihazın mevcut grafik doğrulaması uygulanmaya devam eder.
+
+Hâlâ geçersiz bir çıktı varsa aynı mevcut/önceki orijinal fotoğraflar ve ders profiliyle en fazla bir otomatik düzeltme denemesi yapılır. Bu gerektiğinde analiz süresini ve maliyetini artırır; süre sınırı korunur. İkinci çıktı da geçersizse eksik grafik teslim edilmez ve sınırı belirten hata gösterilir. Modelin içerik doğruluğu garanti edilemez.
+
+Cihaza USB güncellemesi gerekmez. Yeni sunucu modülü `graph-layout.ts` diğer dağıtım dosyalarıyla birlikte yüklenir. Regresyon testi uzun sayı etiketleri, sık eksen işaretleri, eğri dışındaki etiket bağlantıları, önceki sayfa bağlamı, tek düzeltme denemesi ve hatalı çıktının teslim edilmemesini kapsar. `node --test supabase/tests/*.test.mjs` sonrasında üretilen `/tmp/not-layout-regression.json`, `firmware/tools/test_graph_layout.cpp` ile mevcut cihaz ayrıştırıcısında ve 200×200 çizim sınırlarında kontrol edilir.
+
 ## 0.10.1
 
 Fotoğraf yüklemesindeki veritabanı hatası, çalışma bağlamı temizleme sorgusundan kaynaklanıyordu. Sıfırlama artık yalnızca ilgili çalışma oturumunun sayfalarını temizler. Cihaza yeniden yazılım yüklemeden sunucu düzeltmesi uygulanabilir.
 
 Matematik dönüşümü metne ve grafik etiketlerine uygulanır: y^2 → y², x^{a+b} → xᵃ⁺ᵇ, Y_{t+1} → Yₜ₊₁, x_i → xᵢ. Desteklenmeyen ifadeler korunur. Tam LaTeX, matris veya üst üste kesir gösterimi yoktur. Sunucu grafik ölçümleri cihazın aynı font verisinden üretilir.
 
-Dağıtım kaynakları: `index.ts`, `answer.ts`, `context.ts`, `math-text.ts`, `font-metrics.ts`. Beşi birlikte yüklenir. Anahtarlar sunucuda yapılandırılır; bu depoya veya tarayıcıya eklenmez.
+Dağıtım kaynakları: `index.ts`, `answer.ts`, `context.ts`, `math-text.ts`, `font-metrics.ts`. `graph-layout.ts` ile birlikte altısı yüklenir. Anahtarlar sunucuda yapılandırılır; bu depoya veya tarayıcıya eklenmez.
 
 Test komutu: `node --test supabase/tests/*.test.mjs`. `page-context-regression.sql` testi yalnızca geçici tablolarla çalışır ve sonunda geri alınır; gerçek fotoğraf/cevap kayıtlarını değiştirmez. 1,5 MB ilk ve ikinci sayfa, yeniden deneme, yeni çalışma ve temizleme senaryoları doğrulandı. Cihaz çizim sınırları ve API teslimi de test edildi; fiziksel cihaz testi kullanıcıdaki USB yüklemesinden sonra gerekir.
 

@@ -1,5 +1,6 @@
 // Self-contained Supabase Edge Function. Secrets never enter frontend or logs.
-import {ANSWER_SCHEMA,ANSWER_FORMAT,GRAPH_INSTRUCTIONS,validateDocument,plainAnswer,readDocument} from './answer.ts';
+import {ANSWER_SCHEMA,ANSWER_FORMAT,GRAPH_INSTRUCTIONS,plainAnswer,readDocument} from './answer.ts';
+import {prepareDocument} from './graph-layout.ts';
 import {CONTEXT_INSTRUCTIONS,PAGE_ANSWER_SCHEMA,pageInput,contextDecision} from './context.ts';
 export const MODEL = 'gpt-6.1-sol';
 export const MAX_ANSWER_BYTES = 65536;
@@ -86,14 +87,28 @@ export function createHandler({env,fetcher=fetch,waitUntil}) {
  async function finish(id,body) {await rest('not_kamera_jobs?id=eq.'+encodeURIComponent(id)+'&status=eq.processing',{method:'PATCH',body:JSON.stringify(body)});}
  async function analyze(id,bytes,type,profile,previous=[]) {
   try {
-   const r=await fetcher('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify(modelRequest(profile,{mime:type,image_base64:imageBase64(bytes)},previous)),signal:AbortSignal.timeout(105000)});
-   if(!r.ok)throw new ApiError(r.status,'OpenAI analizi başarısız (HTTP '+r.status+'). API/model erişimini ve hesap kotasını kontrol et.');
-   const data=await r.json();
-   if(data.status!=='completed')throw new ApiError(502,'OpenAI yanıtı tamamlanmadı. Eksik çözüm cihaza gönderilmedi.');
-   const answer=(data.output||[]).filter(x=>x.type==='message').flatMap(x=>x.content||[]).filter(x=>x.type==='output_text'&&typeof x.text==='string').map(x=>x.text).join('\n\n').trim();
-   if(!answer)throw new ApiError(502,'OpenAI okunabilir metin döndürmedi.');
-   if(new TextEncoder().encode(answer).length>MAX_ANSWER_BYTES)throw new ApiError(502,'Cevap ekran kapasitesini aştı. Soruları daha küçük gruplar halinde gönder; metin kesilmedi.');
-   let document,context;try{const parsed=JSON.parse(answer);context=contextDecision(parsed.context,previous.length);document=validateDocument(parsed.answer);}catch(e){throw new ApiError(502,'Cevap/grafik doğrulanamadı: '+e.message+' Soruyu daha küçük bölümlere ayırıp tekrar gönder.');}
+   const current={mime:type,image_base64:imageBase64(bytes)},deadline=Date.now()+110000;
+   let document,context,reason='structure';
+   for(let attempt=0;attempt<2;attempt++){
+    const remaining=deadline-Date.now();
+    if(attempt&&remaining<15000)throw new ApiError(502,'Grafik düzeni otomatik düzeltilemedi ('+reason+'). Eksik cevap cihaza gönderilmedi; fotoğrafı tekrar gönder.');
+    const request=modelRequest(profile,current,previous);
+    if(attempt)request.instructions+='\nDARSTELLUNGSREPARATUR: Die vorige Ausgabe hat die Geräteprüfung nicht bestanden ('+reason+'). Prüfe die Lösung erneut anhand derselben Originalbilder und liefere die vollständige Antwort im gleichen Schema. Behalte erforderliche Grafiken, alle Teilaufgaben und fachlich korrekte Werte bei. Normierte Koordinaten 0..100, höchstens 3 Kurven/Markierungen/Pfeile/Ticks je Diagramm, 2..24 Kurvenpunkte. Kurvenanker auf die eigene Kurve. Kurze eindeutige Labels mit vollständiger Legende in text. Bei zu vielen Kurven/Punkten oder dichten Ticks mehrere Diagramme mit identischem Maßstab verwenden. Keine erfundenen Werte, keine abgeschnittenen Teile, kein Text anstelle einer verlangten Zeichnung.';
+    const r=await fetcher('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(Math.min(105000,remaining))});
+    if(!r.ok)throw new ApiError(r.status,'OpenAI analizi başarısız (HTTP '+r.status+'). API/model erişimini ve hesap kotasını kontrol et.');
+    const data=await r.json();
+    if(data.status!=='completed')throw new ApiError(502,'OpenAI yanıtı tamamlanmadı. Eksik çözüm cihaza gönderilmedi.');
+    const answer=(data.output||[]).filter(x=>x.type==='message').flatMap(x=>x.content||[]).filter(x=>x.type==='output_text'&&typeof x.text==='string').map(x=>x.text).join('\n\n').trim();
+    if(!answer)throw new ApiError(502,'OpenAI okunabilir metin döndürmedi.');
+    if(new TextEncoder().encode(answer).length>MAX_ANSWER_BYTES)throw new ApiError(502,'Cevap ekran kapasitesini aştı. Soruları daha küçük gruplar halinde gönder; metin kesilmedi.');
+    try{
+     const parsed=JSON.parse(answer);context=contextDecision(parsed.context,previous.length);document=prepareDocument(parsed.answer);break;
+    }catch(e){
+     // Bounded reason codes only. Never echo generated content into logs/errors.
+     reason=typeof e.message==='string'?e.message.match(/\(([a-z0-9_]+)\)/)?.[1]||'structure':'structure';
+     if(attempt)throw new ApiError(502,'Grafik düzeni otomatik düzeltilemedi ('+reason+'). Eksik cevap cihaza gönderilmedi; fotoğrafı tekrar gönder.');
+    }
+   }
    await finish(id,{status:'done',answer:document,error:'',context_decision:context.decision,context_used:context.used_pages});
   } catch(e) {
    const error=e instanceof ApiError?e.message:(e.name==='TimeoutError'||e.name==='AbortError'?'Analiz zaman aşımına uğradı. Bekleyen işlemi kontrol et veya tekrar dene.':'Analiz tamamlanamadı. Bağlantıyı ve sunucu durumunu kontrol et.');
