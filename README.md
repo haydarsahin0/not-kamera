@@ -1,6 +1,6 @@
 # Not Kamera
 
-**0.8.0:** Grafik istenen sorularda gerçek siyah/beyaz grafik sayfaları hazırlanır: eksenler, 16 px Unicode etiketler, eğriler, denge noktaları ve oklar. Metin 18 px kalır. PWR ile okuma ekranı yerine sevimli bir pil göstergesi açılır; tekrar basınca aynı sayfaya dönülür. Pil yüzdesi V2 ADC voltaj ölçümünden yaklaşık hesaplanır, şarj durumu algılandığı iddia edilmez. 30 saniyelik geçiş ve BOOT işlevleri korunur. Güncellerken erase seçilmez. Yeni grafik/pil davranışının fiziksel cihaz testi yükleme sonrası yapılmalıdır.
+**0.9.0:** Son 12 cevap cihazın Flash belleğinde saklanır; her cevabın kendi okuma konumu vardır. Güç kesilip geri geldiğinde son kaydedilmiş sayfa internet beklemeden açılır. Her metin ve grafik sayfasında soru/alt görev ve o görevin sayfa numarası gösterilir. Yeni cevap otomatik açılır; eski cevaplara cihazın yerel sayfasındaki geçmiş bölümünden dönülür. 18 px Unicode, gerçek grafikler, pil ekranı, 30 saniyelik geçiş ve BOOT işlevleri korunur. Güncellemede erase seçilmez. Testler ve gerçek firmware derlemesi tamamlandı; fiziksel cihaz testi yükleme sonrası yapılmalıdır.
 
 **0.6.0 ekran güncellemesi:** Büyük 20 px kalın Unicode yazı, Almanca/Türkçe harfler ve matematik simgeleri, 30 saniyede otomatik sayfa geçişi. Butonlar aynı; elle geçiş okuma süresini sıfırlar. Son sayfadan başa döner. Yeni firmware derlendi ve ekran/timer testleri geçti; yeni sürümün fiziksel cihaz testi bekliyor.
 

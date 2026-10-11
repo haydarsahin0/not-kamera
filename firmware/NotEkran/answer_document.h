@@ -4,8 +4,25 @@
 
 namespace NoteAnswer {
 constexpr const char* FORMAT="not-ekran-answer-v1";
-struct Page {bool graphic=false;std::vector<std::string> lines;NoteGraph::Graph graph;};
+struct Page {bool graphic=false;std::vector<std::string> lines;NoteGraph::Graph graph;std::string task="Not";size_t taskPage=1,taskPages=1;};
 struct Document {std::vector<Page> pages;};
+inline void labelSection(Document&d,size_t begin,const std::string&task){
+ const size_t count=d.pages.size()-begin;
+ for(size_t i=begin;i<d.pages.size();++i){d.pages[i].task=task.empty()?"Not":task;d.pages[i].taskPage=i-begin+1;d.pages[i].taskPages=count;}
+}
+inline std::string heading(const Page&p){
+ std::string task=p.task;
+ if(task.rfind("Aufgabe ",0)==0)task="Aufg. "+task.substr(8);
+ const std::string count=std::to_string(p.taskPage)+"/"+std::to_string(p.taskPages);
+ int budget=192-NoteText::width(count,NoteFont::font16)-12;
+ if(NoteText::width(task,NoteFont::font16)>budget){
+  std::string shortened;
+  for(size_t i=0;i<task.size();){size_t next=i;NoteText::decode(task,next);auto candidate=task.substr(0,next);
+   if(NoteText::width(candidate+"…",NoteFont::font16)>budget)break;
+   shortened=candidate;i=next;
+  }task=shortened+"…";
+ }return task;
+}
 inline void addText(Document&d,const std::string&s,int size){
  if(s.empty())return;
  auto lines=NoteText::wrap(NoteText::normalize(s),192,NoteText::font(size));size_t rows=160/NoteText::font(size).lineHeight;
@@ -37,17 +54,17 @@ inline bool parse(const std::string&s,int size,Document&out){
  Document next;
  size_t begin=s.find_first_not_of(" \n\r\t");
  if(begin==std::string::npos)return false;
- if(s[begin]!='{'){addText(next,s,size);out=std::move(next);return true;}
+ if(s[begin]!='{'){addText(next,s,size);labelSection(next,0,"Not");out=std::move(next);return true;}
  const char*end=nullptr;cJSON*root=cJSON_ParseWithOpts(s.c_str(),&end,true);
- if(!root){addText(next,s,size);out=std::move(next);return true;}
- auto fmt=field(root,"format");if(!cJSON_IsString(fmt)||std::string(fmt->valuestring)!=FORMAT){cJSON_Delete(root);addText(next,s,size);out=std::move(next);return true;}
+ if(!root){addText(next,s,size);labelSection(next,0,"Not");out=std::move(next);return true;}
+ auto fmt=field(root,"format");if(!cJSON_IsString(fmt)||std::string(fmt->valuestring)!=FORMAT){cJSON_Delete(root);addText(next,s,size);labelSection(next,0,"Not");out=std::move(next);return true;}
  auto sections=field(root,"sections");bool ok=list(sections,1,24);int count=0;const cJSON*section;
- if(ok)cJSON_ArrayForEach(section,sections){std::string task,body;auto graphs=field(section,"graphs");if(!text(section,"task",task,160)||!text(section,"text",body,65536)||!list(graphs,0,4)){ok=false;break;}
+ if(ok)cJSON_ArrayForEach(section,sections){const size_t start=next.pages.size();std::string task,body;auto graphs=field(section,"graphs");if(!text(section,"task",task,160)||!text(section,"text",body,65536)||!list(graphs,0,4)){ok=false;break;}
   addText(next,task+(body.empty()?"":"\n"+body),size);const cJSON*v;
   cJSON_ArrayForEach(v,graphs){if(++count>12){ok=false;break;}Page p;p.graphic=true;if(!graph(v,p.graph)){ok=false;break;}
    addText(next,task+"\n"+p.graph.title,size);NoteGraph::Probe probe;auto legend=NoteGraph::draw(probe,p.graph);next.pages.push_back(std::move(p));
    std::string key;for(auto&entry:legend)key+=entry+"\n";addText(next,key,size);
-  }if(!ok)break;
+  }if(!ok)break;labelSection(next,start,task);
  }
  cJSON_Delete(root);if(!ok||next.pages.empty()||next.pages.size()>10000)return false;out=std::move(next);return true;
 }

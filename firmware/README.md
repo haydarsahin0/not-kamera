@@ -1,6 +1,20 @@
-# Not Ekran V2 — 0.8.0
+# Not Ekran V2 — 0.9.0
 
-## 0.8.0: gerçek grafik sayfaları ve pil ekranı
+## 0.9.0: cevap geçmişi, güç kesintisinden sonra devam, soru başlıkları
+
+- Son **12 ayrı cevap** LittleFS üzerinde kaynak UTF-8/JSON belgesi olarak saklanır; grafikler ve fontlar açılışta yeniden üretilir. Aynı içerik/font tekrar gelirse kopya kayıt oluşturulmaz, kendi sayfa konumu korunur. Yeni içerik otomatik açılır; kapasite dolunca en eski cevap kaldırılır. Fotoğraflar/API anahtarları bu geçmişe yazılmaz.
+- Her cevabın okuma konumu fiziksel ekran yenilemesi başarılı olduktan sonra atomik indeks değişimiyle kaydedilir. Güç döngüsünde son **başarıyla kaydedilmiş** sayfa internet beklemeden geri gelir. Yenileme/kayıt sürerken güç kesilirse önceki kayıt dönebilir. Yeni cevap ve indeks CRC32/boyut doğrulamasıyla okunur; yarım geçici dosya önceki indeksi silmez. Değişmeyen konum yeniden yazılmaz. Ekranda gösterildiği kaydedilmiş teslimatın tekrar gelmesi okuma konumunu değiştirmez; yeni teslimat ise otomatik açılır.
+- Her metin/grafik/legend sayfasında 16 px Unicode soru başlığı ve **o göreve ait** `3/7` sayacı vardır. Uzun başlık üst şeritte kısaltılır; tam başlık kaynak/metin sayfasında korunur. Gövde 18 px kalır. BOOT tek/çift/uzun, PWR pil ekranı ve 30 saniyelik otomatik geçiş aynıdır.
+- Yerel `/` sayfasında cevap geçmişi vardır. `/history/select` ve `/clear` kimlik doğrulama ve CSRF gerektiren POST'lardır. Silme yalnızca açık cevabı geçmişten kaldırır; kalan son cevap açılır. Eski cevaba dönme dışında yeni cevapları okumak için dokunmak gerekmez. Bu sürüm kamera çekimini otomatikleştirmez.
+- Mevcut `default_8MB` bölüm tablosu korunur; `spiffs` adlı 1.5 MiB veri bölümü LittleFS için kullanılır. İlk kullanımda **yalnız tamamen 0xFF olan** bölüm formatlanır; mevcut veride mount/CRC hatası varsa otomatik silme yapılmaz. Yeni cevap kayıt hatasında önceki cevap korunur, fiziksel teslimat onaylanmaz ve yerel durum sayfasında hata gösterilir. Yükleyicinin **erase seçeneğini kapalı bırak**: NVS ve yeni cevap geçmişi korunur. 0.8.0'daki yalnız RAM'de olan eski cevaplar geçmişe geriye dönük alınamaz; sonraki cevaplar saklanır.
+- Native hata enjeksiyonu testleri: kaynak/indeks yazımı kesintisi, CRC/boyut bozulması, ayrı cevap konumları, tekrar teslimat, sınır/12 kayıt, 64 KiB ve Unicode/grafik başlıkları. Ekran/pil/tuş/fotoğraf ve API testleri ile ESP32-S3 derlemesi ayrıca çalıştırılır. Donanımda Flash/PWR/panel doğrulaması kullanıcı USB yüklemesi sonrası gereklidir.
+
+```sh
+g++ -std=c++17 -Wall -Wextra -Werror -I/path/to/cJSON firmware/tools/test_history.cpp /path/to/cJSON/cJSON.c -o /tmp/test-history
+/tmp/test-history firmware/tests/graph-fixture.json
+```
+
+## Önceki 0.8.0: gerçek grafik sayfaları ve pil ekranı
 
 - Sunucu OpenAI Responses `text.format` strict JSON Schema ile metin/grafik belgesi alır. Grafik gerekiyorsa normlanmış çizim verisi istenir; yalnız bir tarif çizim sayılmaz. Her grafik en fazla 3 eğri, 3 nokta, 3 ok, her eksende 3 tick; 2–24 destek noktası/eğri. Karmaşık çizimler en fazla 12 ayrı grafik, 4/alt görev ve 24 alt görev içinde bölünür. Bu sürüm 2D eğri/eksen grafiklerini destekler; bütün olası diyagram türleri veya modelin iktisadi doğruluğu garanti edilmez.
 - Grafik eksenleri, eğrileri, denge noktaları, izdüşümleri, değişim okları ve 16 px Unicode etiketler cihazda çizilir. Aynı algoritma ve font ölçüleriyle etiket taşması/çakışması sunucuda kontrol edilir. Yakın denge noktaları için kısa işaret çizgileri kullanılır; uzun etiket sığmazsa okunabilir kod ve sonraki sayfada açıklaması korunur. Hatalı/eksik/aşırı büyük çizim başarılı cevap veya ekran ACK'i olmaz. Başlık ve açıklama ayrı 18 px metin sayfalarıdır.
@@ -49,7 +63,7 @@ Aşağıdaki fotoğraf aktarım yolu 0.5.0 ile aynıdır.
 
 ## Tek iPhone, yalnızca cihaz sayfası
 
-1. USB ile 0.8.0 yazılımını yükle. Silme seçeneğini kapalı bırak: Wi-Fi ve uygulama eşleştirmesi NVS’den korunur.
+1. USB ile 0.9.0 yazılımını yükle. Silme seçeneğini kapalı bırak: Wi-Fi ve uygulama eşleştirmesi NVS’den korunur.
 2. NotEkran ağına bağlanıp `http://192.168.4.1/camera` aç. Yerel kullanıcı `admin`; şifre cihazın bağlantı ekranındaki koddur. Önceki eşleştirme otomatik okunur. OpenAI anahtarı girilmez veya cihaz tarafından indirilmez; yalnızca Supabase fonksiyonu bu anahtarı kullanır.
 3. Fotoğrafı çek/seç. Sayfa JPEG’e küçültüp CSRF korumalı multipart POST ile **yerel cihaza** yükler. Hiçbir tarayıcı isteği buluta gitmez.
 4. “Fotoğraf cihaz tarafından alındı” mesajından sonra NotEkran ağından çıkıp iPhone kişisel erişim noktasını aç. Cihaz önceden kaydedilen ağa tekrar bağlanır, saati NTP ile doğrular, TLS üzerinden fotoğrafı Supabase’e gönderir.
@@ -136,7 +150,7 @@ python3 firmware/tools/build.py
 ```
 
 FQBN, sürücü revizyonu ve paketleme işlemi build.py içindedir. Çıktı
-`web/install/not-ekran-v2.bin`, flash başlangıcı `0x0`. 0x10000'e yükleme!
+0.9.0'dan itibaren yükleyici **ayrı parçalar** yazar: `bootloader.bin` → `0x0`, `partitions.bin` → `0x8000`, `boot-app0.bin` → `0xe000`, `not-ekran-v2.bin` (yalnız uygulama) → `0x10000`. Birleşik görüntü NVS aralığını da kapladığından artık kullanılmaz. `not-ekran-v2.bin` tek başına `0x0`'a yüklenmez. Bölüm tablosu önceki sürümle aynıdır; eraseAll kapalıyken NVS ve LittleFS sektörlerine yazılmaz.
 Arduino'nun birleştirilmiş çıktısında yalnızca tam uygulama sonrasındaki boş dolgu kesilir.
 `build-info.json` SHA-256 değerini içerir. Derleme sırrı/Wi-Fi şifresi gerektirmez.
 
