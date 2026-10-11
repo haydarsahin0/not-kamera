@@ -47,16 +47,17 @@ int main(){
  for(size_t row=0;row<formulas.size();++row){assert(NoteText::width(formulas[row],NoteFont::font18)<=192);assert(formulas[row].find("[U+")==std::string::npos);NoteText::draw(math,formulas[row],4,21+NoteFont::font18.ascent+row*NoteFont::font18.lineHeight,NoteFont::font18);}
  math.save("/tmp/not-math-0101-preview.pgm");
  PageRotation timer;
+ assert(PageRotation::interval==50000);
  assert(!timer.due(999999,true,3,false));timer.shown(1000);
- assert(!timer.due(30999,true,3,false));assert(timer.due(31000,true,3,false));assert(!timer.due(31001,true,3,false));
- timer.shown(34000);assert(!timer.due(63999,true,3,false));assert(timer.due(64000,true,3,false));
- // A manual move gets a fresh 30 seconds only after the refresh completes.
- timer.shown(65000);assert(!timer.due(95000,true,3,true));timer.shown(98000);assert(!timer.due(127999,true,3,false));assert(timer.due(128000,true,3,false));
+ assert(!timer.due(50999,true,3,false));assert(timer.due(51000,true,3,false));assert(!timer.due(51001,true,3,false));
+ timer.shown(54000);assert(!timer.due(103999,true,3,false));assert(timer.due(104000,true,3,false));
+ // A manual move gets 50 seconds after the physical refresh completes.
+ timer.shown(105000);assert(!timer.due(155000,true,3,true));timer.shown(158000);assert(!timer.due(207999,true,3,false));assert(timer.due(208000,true,3,false));
  timer.shown(0);assert(!timer.due(60000,false,3,false));assert(!timer.due(60001,true,3,false));
  timer.shown(0);assert(!timer.due(60000,true,1,false));
- timer.shown(0xfffffff0);assert(!timer.due(uint32_t(0xfffffff0+29999u),true,3,false));assert(timer.due(uint32_t(0xfffffff0+30000u),true,3,false));
- ButtonNavigation button;timer.shown(0);button.update(true,29990);
- assert(!timer.due(30000,true,3,button.waiting()));
- button.update(false,30050);assert(button.update(false,30451)==NavEvent::Next);
- std::cout<<"PASS Unicode, actual glyph raster bounds, lossless 64 KiB pagination, 30s rotation/manual/pause/rollover\n";
+ timer.shown(0xfffffff0);assert(!timer.due(uint32_t(0xfffffff0+49999u),true,3,false));assert(timer.due(uint32_t(0xfffffff0+50000u),true,3,false));
+ ButtonNavigation button;timer.shown(0);button.update(true,49990);
+ assert(!timer.due(50000,true,3,button.waiting()));
+ button.update(false,50050);assert(button.update(false,50451)==NavEvent::Next);
+ std::cout<<"PASS Unicode raster, lossless pagination, 50s rotation/manual/pause/rollover\n";
 }

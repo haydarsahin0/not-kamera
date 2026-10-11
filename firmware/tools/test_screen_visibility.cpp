@@ -21,7 +21,7 @@ int main(){
  // Restore the retained content before accepting a waiting cloud answer.
  screen.painted(ScreenFrame::Content);rotation.shown(130000);
  assert(screen.canReceiveAnswer());assert(screen.frame(false)==ScreenFrame::None);
- assert(!rotation.due(159999,true,9,false));assert(rotation.due(160000,true,9,false));
+ assert(!rotation.due(179999,true,9,false));assert(rotation.due(180000,true,9,false));
  // A second quick toggle cancels a pending white frame safely.
  screen.toggle();screen.toggle();assert(screen.frame(false)==ScreenFrame::Content);
  ScreenPowerButton key;key.begin(false,0);
@@ -36,5 +36,5 @@ int main(){
  key.update(true,100100);key.update(true,100135);key.update(false,100150);assert(key.update(false,100185));
  // Unsigned timing also works across millis rollover.
  key.begin(false,0xffffffe0);key.update(true,0xfffffff0);assert(!key.update(true,0x13));key.update(false,0x20);assert(key.update(false,0x43));
- std::cout<<"PASS blank/restore, suppressed hidden refresh, delivery ordering, paused 30s timer, PWR debounce/startup/hold/rollover\n";
+ std::cout<<"PASS blank/restore, suppressed hidden refresh, delivery ordering, paused 50s timer, PWR debounce/startup/hold/rollover\n";
 }

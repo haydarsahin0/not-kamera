@@ -25,6 +25,6 @@ int main(int argc,char**argv){
  assert(NoteBattery::percent(0)==-1);assert(NoteBattery::percent(4400)==-1);assert(NoteBattery::percent(3000)==0);assert(NoteBattery::percent(4120)==100);
  for(int mv:{0,3000,3500,3800,4120}){Raster r;NoteBattery::draw(r,mv);assert(r.ink>400);r.save("/tmp/not-battery-"+std::to_string(mv)+".pgm");}
  ScreenVisibility v;v.toggle();assert(v.frame(true)==ScreenFrame::Standby);v.painted(ScreenFrame::Standby);assert(v.frame(true)==ScreenFrame::None);v.refreshStandby();assert(v.frame(false)==ScreenFrame::Standby);assert(!v.canReceiveAnswer());v.painted(ScreenFrame::Standby);v.toggle();assert(v.frame(false)==ScreenFrame::Content);assert(!v.canReceiveAnswer());v.painted(ScreenFrame::Content);assert(v.canReceiveAnswer());
- PageRotation rotation;rotation.shown(1000);assert(rotation.due(31000,true,doc.pages.size(),false));rotation.pause();assert(!rotation.due(99000,false,doc.pages.size(),false));rotation.shown(100000);assert(!rotation.due(129999,true,doc.pages.size(),false));assert(rotation.due(130000,true,doc.pages.size(),false));
+ PageRotation rotation;rotation.shown(1000);assert(rotation.due(51000,true,doc.pages.size(),false));rotation.pause();assert(!rotation.due(99000,false,doc.pages.size(),false));rotation.shown(100000);assert(!rotation.due(149999,true,doc.pages.size(),false));assert(rotation.due(150000,true,doc.pages.size(),false));
  std::cout<<"PASS graph/Unicode raster bounds, transactional answer pagination, legacy delivery, voltage estimate, standby refresh/restore, page rotation\n";
 }

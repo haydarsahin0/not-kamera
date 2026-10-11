@@ -80,7 +80,7 @@ void root(){
  if(receivedAt)h+=" · Son metin "+String((millis()-receivedAt)/1000)+" saniye önce alındı";
  h+="<br>Bulut: "+htmlEscape(cloudGetError());
  h+="</small></section><section><h2>Fotoğraftan açıklama</h2><p><a href='/camera'>Fotoğraf çek ve cevabı ekrana gönder →</a></p><small>Fotoğrafı bu cihaz sayfasından yükle. Cihaz internet geldiğinde gönderir ve cevabı ekranda gösterir. OpenAI anahtarı Supabase’de kalır.</small></section><section><h2>Metin gönder</h2>"+formStart("/text");
- h+=R"HTML(<label>Metin<textarea name="text" maxlength="65536" required placeholder="Merhaba"></textarea></label><label>Yazı boyutu<select name="size"><option value="2">Standart · 18 px</option><option value="1">Orta · 16 px</option></select></label><button>Metni ekrana gönder</button><small>En fazla 65536 UTF-8 bayt. Uzun metin sayfalara ayrılır. Türkçe/Almanca harfler ve yaygın matematik simgeleri korunur. Nadir desteklenmeyen karakterler ? yerine [U+XXXX] koduyla belirtilir. Sayfalar 30 saniyede otomatik ilerler; son sayfadan ilk sayfaya döner. Butonla geçişte süre yeniden başlar. Metin sayfalara ayrılır; hiçbir bölüm kısaltılmaz. Son 12 cevap ve her cevabın son kaydedilmiş sayfası cihazda saklanır. Yeniden açılınca internet beklemeden okuma devam eder.</small></form><div class="buttons">)HTML";
+ h+=R"HTML(<label>Metin<textarea name="text" maxlength="65536" required placeholder="Merhaba"></textarea></label><label>Yazı boyutu<select name="size"><option value="2">Standart · 18 px</option><option value="1">Orta · 16 px</option></select></label><button>Metni ekrana gönder</button><small>En fazla 65536 UTF-8 bayt. Uzun metin sayfalara ayrılır. Türkçe/Almanca harfler ve yaygın matematik simgeleri korunur. Nadir desteklenmeyen karakterler ? yerine [U+XXXX] koduyla belirtilir. Sayfalar 50 saniyede otomatik ilerler; son sayfadan ilk sayfaya döner. Butonla geçişte süre yeniden başlar. Metin sayfalara ayrılır; hiçbir bölüm kısaltılmaz. Son 12 cevap ve her cevabın son kaydedilmiş sayfası cihazda saklanır. Yeniden açılınca internet beklemeden okuma devam eder.</small></form><div class="buttons">)HTML";
  h+=formStart("/previous")+"<button>Önceki</button></form>"+formStart("/next")+"<button>Sonraki</button></form></div>";
  h+=formStart("/display")+"<button>"+(visibility.hidden()?String("Ekranı aç; kaldığın sayfaya dön"):String("Pil ekranına geç; sayfayı koru"))+"</button></form>";
  h+=formStart("/help")+"<button>Bağlantı bilgilerini göster</button></form>"+formStart("/read")+"<button>Metne dön</button></form>"+formStart("/clear")+"<button>Bu cevabı geçmişten sil</button></form></section>";
@@ -144,7 +144,7 @@ void paint(){
    if(page.graphic)NoteGraph::draw(canvas,page.graph);
    else for(size_t n=0;n<page.lines.size();++n)NoteText::draw(canvas,page.lines[n],4,21+bodyFont.ascent+n*bodyFont.lineHeight,bodyFont);
   }
-  canvas.setTextSize(1);canvas.setCursor(4,188);canvas.print("30sn oto / 1:ileri 2:geri");
+  canvas.setTextSize(1);canvas.setCursor(4,188);canvas.print("50sn oto / 1:ileri 2:geri");
  }
  if(panel->healthy){panel->EPD_Init();if(panel->healthy)panel->EPD_Display();}
  if(panel->healthy&&!helpVisible&&!showPhotoProgress&&!document.pages.empty()){

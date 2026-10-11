@@ -1,25 +1,7 @@
-# Not Kamera sunucu kodu
+# Kurze und vollständige Antworten
 
-## Grafik düzeni düzeltmesi (0.10.1 cihazıyla uyumlu)
+Die Antwortregeln sind für jede Teilfrage enger gefasst: eine Definition in einem Satz, eine einfache Erklärung meist in ein bis zwei Sätzen und eine Rechnung mit dem nötigen Rechenweg, Ergebnis und Einheit.
 
-Sunucu uzun eksen, eğri, nokta ve sayı etiketlerini kısa kodlarla gösterir; tam ad/değer açıklama anahtarında korunur. Yakın eksen işaretleri aynı eğriler ve aynı ölçekte ayrı grafik sayfalarına bölünür. Etiket bağlantı ucu kendi eğrisine taşınabilir; eğriler, noktalar ve sayısal sonuçlar değiştirilmez. Cihazın mevcut grafik doğrulaması uygulanmaya devam eder.
+Ausdrücklich verlangte Herleitungen, Diskussionen und Grafiken bleiben vollständig. Wiederholungen und zusätzliche allgemeine Erklärungen sollen entfallen. Der Antworttext wird nicht nachträglich abgeschnitten. Richtige Ergebnisse oder eine bestimmte Note können nicht garantiert werden.
 
-Hâlâ geçersiz bir çıktı varsa aynı mevcut/önceki orijinal fotoğraflar ve ders profiliyle en fazla bir otomatik düzeltme denemesi yapılır. Bu gerektiğinde analiz süresini ve maliyetini artırır; süre sınırı korunur. İkinci çıktı da geçersizse eksik grafik teslim edilmez ve sınırı belirten hata gösterilir. Modelin içerik doğruluğu garanti edilemez.
-
-Cihaza USB güncellemesi gerekmez. Yeni sunucu modülü `graph-layout.ts` diğer dağıtım dosyalarıyla birlikte yüklenir. Regresyon testi uzun sayı etiketleri, sık eksen işaretleri, eğri dışındaki etiket bağlantıları, önceki sayfa bağlamı, tek düzeltme denemesi ve hatalı çıktının teslim edilmemesini kapsar. `node --test supabase/tests/*.test.mjs` sonrasında üretilen `/tmp/not-layout-regression.json`, `firmware/tools/test_graph_layout.cpp` ile mevcut cihaz ayrıştırıcısında ve 200×200 çizim sınırlarında kontrol edilir.
-
-## 0.10.1
-
-Fotoğraf yüklemesindeki veritabanı hatası, çalışma bağlamı temizleme sorgusundan kaynaklanıyordu. Sıfırlama artık yalnızca ilgili çalışma oturumunun sayfalarını temizler. Cihaza yeniden yazılım yüklemeden sunucu düzeltmesi uygulanabilir.
-
-Matematik dönüşümü metne ve grafik etiketlerine uygulanır: y^2 → y², x^{a+b} → xᵃ⁺ᵇ, Y_{t+1} → Yₜ₊₁, x_i → xᵢ. Desteklenmeyen ifadeler korunur. Tam LaTeX, matris veya üst üste kesir gösterimi yoktur. Sunucu grafik ölçümleri cihazın aynı font verisinden üretilir.
-
-Dağıtım kaynakları: `index.ts`, `answer.ts`, `context.ts`, `math-text.ts`, `font-metrics.ts`. `graph-layout.ts` ile birlikte altısı yüklenir. Anahtarlar sunucuda yapılandırılır; bu depoya veya tarayıcıya eklenmez.
-
-Test komutu: `node --test supabase/tests/*.test.mjs`. `page-context-regression.sql` testi yalnızca geçici tablolarla çalışır ve sonunda geri alınır; gerçek fotoğraf/cevap kayıtlarını değiştirmez. 1,5 MB ilk ve ikinci sayfa, yeniden deneme, yeni çalışma ve temizleme senaryoları doğrulandı. Cihaz çizim sınırları ve API teslimi de test edildi; fiziksel cihaz testi kullanıcıdaki USB yüklemesinden sonra gerekir.
-
-## Sayfalar arası bağlam
-
-Model yeni sayfayla birlikte en fazla altı önceki başarılı orijinal fotoğrafı görür. Yalnızca yeni sayfadaki soruları yanıtlar; bağımsız sorular eski değerleri kullanmamalıdır. Önceki çözümler yeniden girdi olarak verilmez. Bağlantıyı model değerlendirir; bu bir doğruluk garantisi değildir.
-
-Yeni çalışma, ders profili değişikliği veya iki saatlik hareketsizlikten sonraki kabul edilen fotoğraf bağlamı yeniler. En fazla yedi orijinal fotoğraf saklanır. Hareketsizlikte temizlik sonraki kabul edilen istekte yapılır; zamanlanmış silici yoktur. İş kayıtları 24 saat sonra sonraki erişimde temizlenir. Önceki görüntüler istemciye gönderilmez. Birden fazla görüntü analiz maliyetini ve gecikmeyi artırabilir.
+Die Regeln gelten für neu gesendete Fotos. Für den automatischen Seitenwechsel nach 50 Sekunden wird das [Geräteupdate 0.10.2](https://haydarsahin0.github.io/not-kamera/install/?v=0.10.2) benötigt.
