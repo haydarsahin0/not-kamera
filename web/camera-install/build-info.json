@@ -1,5 +1,5 @@
 {
-  "version": "0.1.3",
+  "version": "0.1.4",
   "board": "Seeed Studio XIAO ESP32-S3 Sense (8MB Flash/8MB OPI PSRAM)",
   "sensor": "OV2640 or OV3660, configured 1600x1200 JPEG",
   "arduino_esp32": "3.3.0",
@@ -26,8 +26,8 @@
     {
       "path": "not-camera.bin",
       "offset": 65536,
-      "bytes": 1181904,
-      "sha256": "ca489d3903ea85c631ccde388a76d90c7873e73bc40653edfd780b17a77f6550"
+      "bytes": 1182896,
+      "sha256": "b3854893c10ec7b955d96679be390ac80ee0f2f8a5a70980f7166eba07023c2e"
     }
   ],
   "hardware_tested": false

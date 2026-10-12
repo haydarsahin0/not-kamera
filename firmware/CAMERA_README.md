@@ -1,3 +1,8 @@
+## 0.1.4 — find the hotspot by what is on air
+
+- 0.1.3 still reported “not found” for a typed `Haydar iPhone'u`. While offline the camera now scans every 20 s and joins the visible network whose name matches the saved one exactly, or else the only one equal ignoring quotes, spaces, punctuation and case; that broadcast spelling is then saved.
+- USB status carries the last scan (up to 15 names with signal) and how many networks were seen; zero networks points to the antenna connector.
+
 ## 0.1.3 — hotspot connection help
 
 - iPhone hotspot names use a typographic apostrophe (“Haydar iPhone’u”) while keyboards type `'`. When the saved name is not found, the camera alternately tries the other apostrophe and keeps the spelling that connects.
@@ -19,13 +24,13 @@
 - USB opens with DTR asserted/RTS released and retries one timed-out status query. Test button requests one local frame, without uploading it.
 - Real board temperature, USB recovery, sensor restart/image quality still require physical tests. If the device overheats while capture is paused, disconnect it and check hardware; software cannot certify it safe.
 
-# NotCamera 0.1.3 — ilk deneme sürümü
+# NotCamera 0.1.4 — ilk deneme sürümü
 
 Seeed Studio XIAO ESP32-S3 **Sense**, 8 MB Flash ve 8 MB PSRAM için hazırlanmıştır. OV2640 veya OV3660 ile 1600×1200 JPEG kullanır. Düz XIAO, ESP32-C3 ve Waveshare NotEkran için değildir. Kamera modülü ve üreticinin Wi-Fi anteni takılı olmalıdır.
 
 ## Yükleme
 
-Windows Chrome/Edge'de `https://haydarsahin0.github.io/not-kamera/camera-install/?v=0.1.3` adresini aç. Kamera kartını veri aktarabilen USB-C kabloyla bağla. İlk bölümde kamera yazılımını yükle. NotEkran'a bu dosyayı yükleme.
+Windows Chrome/Edge'de `https://haydarsahin0.github.io/not-kamera/camera-install/?v=0.1.4` adresini aç. Kamera kartını veri aktarabilen USB-C kabloyla bağla. İlk bölümde kamera yazılımını yükle. NotEkran'a bu dosyayı yükleme.
 
 Yükleyicinin seri konsolunu kapat. Gerekirse kameranın RESET tuşuna bir kez bas. İkinci bölümde USB bağlantısını seçip kamera bilgilerini oku. Hotspot adını/şifresini ve NotEkran'da zaten kullandığın **uygulama erişim kodunu** bir kez kaydet. OpenAI API anahtarını buraya girme. Kurulum bilgileri herkese açık siteye veya GitHub'a gönderilmez; tarayıcıdan USB üzerinden kameraya yazılır.
 
