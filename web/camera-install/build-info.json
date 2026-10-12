@@ -1,0 +1,34 @@
+{
+  "version": "0.1.0",
+  "board": "Seeed Studio XIAO ESP32-S3 Sense (8MB Flash/8MB OPI PSRAM)",
+  "sensor": "OV2640 or OV3660, configured 1600x1200 JPEG",
+  "arduino_esp32": "3.3.0",
+  "fqbn": "esp32:esp32:XIAO_ESP32S3:PSRAM=opi,FlashSize=8M,PartitionScheme=default_8MB,USBMode=hwcdc,CDCOnBoot=cdc",
+  "parts": [
+    {
+      "path": "bootloader.bin",
+      "offset": 0,
+      "bytes": 20256,
+      "sha256": "8581a3fb98309f261482327b5ff51a2fabca0ec513f9ba38595ed04479794e58"
+    },
+    {
+      "path": "partitions.bin",
+      "offset": 32768,
+      "bytes": 3072,
+      "sha256": "1d9cca96de0fe07ad7fc0648b9878ddecd9ce565e38b589ad20fea698ed4c80c"
+    },
+    {
+      "path": "boot-app0.bin",
+      "offset": 57344,
+      "bytes": 8192,
+      "sha256": "f94c5d786a7a8fab06ac5d10e33bf37711a6697636dc037559ea19cc410a17f0"
+    },
+    {
+      "path": "not-camera.bin",
+      "offset": 65536,
+      "bytes": 1180816,
+      "sha256": "d14b563e3d5d5e61c536302b76649dad1ff74e2832e60834381770d537f1b2f4"
+    }
+  ],
+  "hardware_tested": false
+}

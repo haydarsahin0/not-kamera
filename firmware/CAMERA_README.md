@@ -1,0 +1,31 @@
+# NotCamera 0.1.0 — ilk deneme sürümü
+
+Seeed Studio XIAO ESP32-S3 **Sense**, 8 MB Flash ve 8 MB PSRAM için hazırlanmıştır. OV2640 veya OV3660 ile 1600×1200 JPEG kullanır. Düz XIAO, ESP32-C3 ve Waveshare NotEkran için değildir. Kamera modülü ve üreticinin Wi-Fi anteni takılı olmalıdır.
+
+## Yükleme
+
+Windows Chrome/Edge'de `https://haydarsahin0.github.io/not-kamera/camera-install/?v=0.1.0` adresini aç. Kamera kartını veri aktarabilen USB-C kabloyla bağla. İlk bölümde kamera yazılımını yükle. NotEkran'a bu dosyayı yükleme.
+
+Yükleyicinin seri konsolunu kapat. Gerekirse kameranın RESET tuşuna bir kez bas. İkinci bölümde USB bağlantısını seçip kamera bilgilerini oku. Hotspot adını/şifresini ve NotEkran'da zaten kullandığın **uygulama erişim kodunu** bir kez kaydet. OpenAI API anahtarını buraya girme. Kurulum bilgileri herkese açık siteye veya GitHub'a gönderilmez; tarayıcıdan USB üzerinden kameraya yazılır.
+
+Kamera yeniden başladıktan sonra aynı bilgileri her açılışta kullanır. iPhone'un kişisel erişim noktası açık olmalıdır; gerekirse Uyumluluğu En Üst Düzeye Çıkar seçeneğini aç. NotEkran da internete bağlı ve aynı uygulama erişim koduyla eşleştirilmiş olmalıdır.
+
+## Kullanım
+
+Güç verildiğinde kamera kendiliğinden çalışır. İlk fotoğraf uygun yeni görüntü oluşunca alınır. Sonraki çekimler arasında varsayılan olarak en az 15 saniye vardır; her 15 saniyede koşulsuz fotoğraf göndermez. Karanlık, boş veya ayrıntısı yetersiz görüntüde bekler. Kısa süreli görüntü kontrolünden sonra üç kare içinden daha uygun olanını seçer. Gönderilen fotoğrafın cevabı NotEkran tarafından gösterilene kadar yeni fotoğraf göndermez. Ekran pil görünümündeyse cevap için okuma ekranını açmak gerekebilir.
+
+USB bölümünde görünen NotCamera ağı ve koduyla telefondan `http://192.168.4.1` açılabilir. Kullanıcı adı `admin`, parola kameranın kendi kodudur. Bu kamera sayfasıdır; NotEkran'ın ağı farklıdır. İki cihazın kendi ağı da aynı yerel adresi kullanır: hangi Wi-Fi ağına bağlandıysan o cihaz açılır. Hotspot üzerinden aynı sayfa USB bölümünde gösterilen kamera IP adresinden açılabilir; iPhone hotspot erişimi ayrıca denenmelidir.
+
+Bu sayfadan son görüntüyü, bağlantı durumunu, ders profilini ve deneme eşiklerini kontrol edebilirsin. Günlük kullanımda sayfayı açman veya tuşa basman gerekmez.
+
+## Sınırlar ve test
+
+Gerçek kamera henüz elde olmadığı için bu sürüm **donanımda test edilmedi**. Derleme ve yazılımsal testler donanım testinin yerine geçmez. Önce çalışma kâğıtlarıyla farklı ışık, mesafe ve el hareketlerinde dene. Netlik/benzerlik kontrolleri yaklaşık hesaplamalardır; kumaşı belge sanabilir, aynı sayfayı yeni sanabilir veya küçük bir alt soru farkını atlayabilir. Sayfa numarası okumaz ve metnin okunabilirliğini garanti etmez. Yapay zeka cevabının doğruluğu da ayrıca kontrol edilmelidir.
+
+Son 8 teslim edilmiş görüntünün karşılaştırma kaydı yeniden başlatmada korunur. Büyük açı değişikliklerini kusursuz eşleştirmez. Bağlantı tekrarında aynı fotoğraf ve istek kimliği kullanılır. Gönderilmekte olan fotoğraf RAM'dedir: gücü kesersen yarım işlem ve fotoğraf kaldığı yerden devam etmeyebilir. Bekleme sırasında derin uyku kullanılmaz. Pil süresi gerçek kullanımda ölçülmelidir.
+
+NotEkran yazılımı ve mevcut sunucu bu sürümde değiştirilmez. Sunucu ders/soru bağlamını mevcut çalışma içinde değerlendirmeye devam eder. Yeni ders/çalışma başlatırken mevcut uygulamadan bağlamı sıfırla; yalnızca kamera görüntü kayıtlarını temizlemek sunucu bağlamını sıfırlamaz.
+
+## Kaynaktan derleme
+
+Arduino ESP32 çekirdeği 3.3.0 gerekir. `python firmware/tools/build_camera.py` ayrı kamera dosyalarını oluşturur. `firmware/tests/test_capture.cpp` görüntü seçimi/bekleme/tekrar davranışlarını bilgisayarda sınar. PSRAM ve kamera modülü eksikse yazılım otomatik gönderime başlamaz.

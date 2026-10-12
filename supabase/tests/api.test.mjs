@@ -19,6 +19,19 @@ function setup({incomplete=false,answer='Aufgabe 1)\n2 + 2 = 4',previous=[],deci
 }
 function photo(){const bytes=new Uint8Array(30);bytes.set([137,80,78,71,13,10,26,10],0);bytes.set([73,72,68,82],12);const v=new DataView(bytes.buffer);v.setUint32(16,200);v.setUint32(20,200);return bytes;}
 function req(path,opts={}){return new Request('https://project.supabase.co/functions/v1/not-kamera-api'+path,{...opts,headers:{Authorization:'Bearer '+token,...opts.headers}})}
+test('standalone camera JPEG/UTF8 profile contract reaches existing API and waits for exact screen acknowledgement',async()=>{
+ const s=setup(),id='83a9ff9c-3979-48e3-8b23-a13a1a30915e';
+ // Structural JPEG SOF fixture: this test exercises the protocol, not lens/OCR quality.
+ const jpeg=Uint8Array.from([255,216,255,192,0,11,8,4,176,6,64,1,1,17,0,255,217]);
+ const profile=Buffer.from(JSON.stringify({course:'Statistik',rules:'Kurze Antworten mit ä, ö und Einheiten.'}),'utf8').toString('base64');
+ const r=await s.handler(req('/api/frames',{method:'POST',body:jpeg,headers:{'Content-Type':'image/jpeg','X-Study-Profile':profile,'X-Request-Id':id,'X-Study-Reset':'0'}}));
+ assert.equal(r.status,202);assert.equal((await r.json()).device_queued,true);
+ const claim=JSON.parse(s.calls.find(x=>x.url.endsWith('/rpc/not_kamera_claim_frame')).opts.body);assert.equal(claim.p_request_id,id);assert.equal(claim.p_mime,'image/jpeg');assert.equal(claim.p_reset,false);
+ await Promise.all(s.tasks);const job=await (await s.handler(req('/api/jobs/'+jobId+'?format=not-ekran-answer-v1'))).json();assert.equal(job.status,'done');
+ let state=await (await s.handler(req('/api/device/status'))).json();assert.equal(state.job_id,jobId);assert.equal(state.ack_id,null);
+ const delivery=state.delivery_id;await s.handler(req('/api/device/ack?id='+delivery+'&pages=3',{method:'POST'}));
+ state=await (await s.handler(req('/api/device/status'))).json();assert.equal(state.job_id,jobId);assert.equal(state.delivery_id,state.ack_id);assert.equal(state.pages,3);
+});
 test('authenticated upload, German profile, asynchronous exact-job retrieval',async()=>{
  const s=setup();const profile=btoa(JSON.stringify({course:'Statistik',rules:'100 Worte'}));
  const r=await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png','X-Study-Profile':profile}}));assert.equal(r.status,202);assert.equal((await r.json()).id,jobId);

@@ -5,6 +5,9 @@ __pycache__/
 .venv/
 node_modules/
 firmware/build/
+firmware/camera-build/
+firmware/NotCamera/cloud_roots.h
+web/camera-install/*.zip
 firmware/NotEkran/epaper_driver_bsp.cpp
 firmware/NotEkran/epaper_driver_bsp.h
 firmware/NotEkran/camera_page.h
