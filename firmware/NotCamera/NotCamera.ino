@@ -16,7 +16,7 @@
 #include "cloud_roots.h"
 #include "setup_page.h"
 
-constexpr char CAMERA_VERSION[]="0.1.5";
+constexpr char CAMERA_VERSION[]="0.1.6";
 constexpr char API[]="https://jckoovsocynnxbrsalld.supabase.co/functions/v1/not-kamera-api";
 constexpr size_t MAX_JPEG=1024*1024,MAX_REPLY=160*1024;
 Preferences prefs;WebServer web(80);SemaphoreHandle_t mutex;
@@ -47,9 +47,9 @@ void cacheImage(camera_fb_t* fb,const NoteCapture::Frame& f){
  if(!fb||fb->len>MAX_JPEG)return;auto p=(uint8_t*)externalAlloc(fb->len);if(!p)return;memcpy(p,fb->buf,fb->len);
  xSemaphoreTake(mutex,portMAX_DELAY);externalFree(latestImage);latestImage=p;latestLength=fb->len;latestMetrics=f;++frameId;xSemaphoreGive(mutex);
 }
-NoteCapture::Frame measure(camera_fb_t* fb){
+NoteCapture::Frame measure(camera_fb_t* fb,esp_jpeg_image_scale_t scale=JPEG_IMAGE_SCALE_1_8){
  NoteCapture::Frame frame;if(!fb||fb->format!=PIXFORMAT_JPEG)return frame;
- esp_jpeg_image_cfg_t c={};c.indata=fb->buf;c.indata_size=fb->len;c.out_format=JPEG_IMAGE_FORMAT_RGB888;c.out_scale=JPEG_IMAGE_SCALE_1_8;
+ esp_jpeg_image_cfg_t c={};c.indata=fb->buf;c.indata_size=fb->len;c.out_format=JPEG_IMAGE_FORMAT_RGB888;c.out_scale=scale;
  esp_jpeg_image_output_t out={};
  if(esp_jpeg_get_image_info(&c,&out)!=ESP_OK||out.output_len>160000||out.width<36||out.height<28)return frame;
  c.outbuf=(uint8_t*)externalAlloc(out.output_len);c.outbuf_size=out.output_len;
@@ -59,23 +59,46 @@ NoteCapture::Frame measure(camera_fb_t* fb){
   frame=NoteCapture::inspect(gray,out.width,out.height);
  }externalFree(c.outbuf);externalFree(gray);return frame;
 }
-bool initCamera(){
+void applyOrientation();
+bool initCamera(framesize_t size=FRAMESIZE_UXGA,int quality=10,int buffers=1,camera_grab_mode_t grab=CAMERA_GRAB_WHEN_EMPTY){
  camera_config_t c={};c.ledc_channel=LEDC_CHANNEL_0;c.ledc_timer=LEDC_TIMER_0;
  c.pin_pwdn=-1;c.pin_reset=-1;c.pin_xclk=10;c.pin_sccb_sda=40;c.pin_sccb_scl=39;
  c.pin_d0=15;c.pin_d1=17;c.pin_d2=18;c.pin_d3=16;c.pin_d4=14;c.pin_d5=12;c.pin_d6=11;c.pin_d7=48;
  c.pin_vsync=38;c.pin_href=47;c.pin_pclk=13;c.xclk_freq_hz=20000000;
- c.pixel_format=PIXFORMAT_JPEG;c.frame_size=FRAMESIZE_UXGA;c.jpeg_quality=10;c.fb_count=1;
- c.fb_location=CAMERA_FB_IN_PSRAM;c.grab_mode=CAMERA_GRAB_WHEN_EMPTY;
+ c.pixel_format=PIXFORMAT_JPEG;c.frame_size=size;c.jpeg_quality=quality;c.fb_count=buffers;
+ c.fb_location=CAMERA_FB_IN_PSRAM;c.grab_mode=grab;
  if(!psramFound()){status("camera_error","PSRAM bulunamadı. Kart/derleme ayarlarını kontrol et.");return false;}
  esp_err_t result=esp_camera_init(&c);
  if(result!=ESP_OK){status("camera_error",String("Kamera başlatılamadı: ")+esp_err_to_name(result)+". Gücü çıkarıp Sense modülünü kontrol et.");return false;}
  auto sensor=esp_camera_sensor_get();if(!sensor){esp_camera_deinit();status("camera_error","Sensör bulunamadı.");return false;}
- sensor->set_framesize(sensor,FRAMESIZE_UXGA);sensor->set_quality(sensor,10);
+ sensor->set_framesize(sensor,size);sensor->set_quality(sensor,quality);applyOrientation();
  return true;
 }
 
 // Worker exclusively owns the sensor. Stop camera clock/DMA between capture windows.
 // This reduces active work; it is not a temperature sensor or a hardware power cutoff.
+// Live view: while the USB page keeps asking (liveUntil), the worker streams small frames instead of capturing.
+// It stops by itself a few seconds after the page stops, so a closed tab never leaves the sensor running.
+// Sensor orientation. The XIAO Sense module delivers a mirrored image by default, so text would read backwards
+// for the user and the model; hmirror is on by default and both can be changed from the USB page (saved in NVS).
+bool hmirror=true,vflip=false,orientChanged=false;
+void applyOrientation(){auto sensor=esp_camera_sensor_get();if(!sensor)return;xSemaphoreTake(mutex,portMAX_DELAY);bool h=hmirror,v=vflip;orientChanged=false;xSemaphoreGive(mutex);sensor->set_hmirror(sensor,h);sensor->set_vflip(sensor,v);}
+uint32_t liveUntil=0;uint8_t* liveImage=nullptr;size_t liveLength=0;unsigned liveSeq=0;NoteCapture::Frame liveMetrics;String liveError;
+bool liveWanted(){xSemaphoreTake(mutex,portMAX_DELAY);bool on=liveUntil&&int32_t(liveUntil-millis())>0;xSemaphoreGive(mutex);return on;}
+void runLive(){
+ if(!initCamera(FRAMESIZE_VGA,14,2,CAMERA_GRAB_LATEST)){xSemaphoreTake(mutex,portMAX_DELAY);liveError=detail;xSemaphoreGive(mutex);vTaskDelay(pdMS_TO_TICKS(2000));return;}
+ xSemaphoreTake(mutex,portMAX_DELAY);sensorActive=true;cameraReady=true;liveError="";xSemaphoreGive(mutex);status("live","Canlı görüntü açık; otomatik çekim bekliyor.");
+ for(unsigned n=0;liveWanted();++n){
+  xSemaphoreTake(mutex,portMAX_DELAY);bool turn=orientChanged;xSemaphoreGive(mutex);if(turn)applyOrientation();
+  camera_fb_t* fb=esp_camera_fb_get();if(!fb){vTaskDelay(pdMS_TO_TICKS(20));continue;}
+  // 640x480 at 1/4 scale is close to the 1600x1200 at 1/8 used for real photos, so the rules read alike.
+  NoteCapture::Frame f;bool measured=n%3==0;if(measured)f=measure(fb,JPEG_IMAGE_SCALE_1_4);
+  auto copy=(uint8_t*)externalAlloc(fb->len);if(copy)memcpy(copy,fb->buf,fb->len);size_t len=fb->len;esp_camera_fb_return(fb);
+  xSemaphoreTake(mutex,portMAX_DELAY);if(copy){externalFree(liveImage);liveImage=copy;liveLength=len;++liveSeq;}if(measured)liveMetrics=f;xSemaphoreGive(mutex);
+  vTaskDelay(pdMS_TO_TICKS(15));
+ }
+ esp_camera_deinit();xSemaphoreTake(mutex,portMAX_DELAY);sensorActive=false;externalFree(liveImage);liveImage=nullptr;liveLength=0;xSemaphoreGive(mutex);
+}
 struct CameraWindow {
  bool ok;
  CameraWindow():ok(initCamera()){
@@ -129,7 +152,7 @@ String snapshot(bool usb=false){
  cJSON_AddStringToObject(j,"ssid",settings.ssid.c_str());cJSON_AddStringToObject(j,"ip",networkIp.c_str());
  cJSON_AddStringToObject(j,"course",settings.course.c_str());cJSON_AddStringToObject(j,"rules",settings.rules.c_str());
  cJSON_AddNumberToObject(j,"interval",settings.limits.interval/1000);cJSON_AddNumberToObject(j,"edge_min",settings.limits.edgeMin);cJSON_AddNumberToObject(j,"duplicate_max",settings.limits.duplicateMax);
- cJSON_AddNumberToObject(j,"mean",latestMetrics.mean);cJSON_AddNumberToObject(j,"light",latestMetrics.light);cJSON_AddNumberToObject(j,"ink",latestMetrics.ink);cJSON_AddNumberToObject(j,"edge",latestMetrics.edge);cJSON_AddNumberToObject(j,"spread",latestMetrics.spread);cJSON_AddNumberToObject(j,"frame",frameId);
+ cJSON_AddNumberToObject(j,"mean",latestMetrics.mean);cJSON_AddNumberToObject(j,"light",latestMetrics.light);cJSON_AddNumberToObject(j,"ink",latestMetrics.ink);cJSON_AddNumberToObject(j,"edge",latestMetrics.edge);cJSON_AddNumberToObject(j,"spread",latestMetrics.spread);cJSON_AddNumberToObject(j,"frame",frameId);cJSON_AddBoolToObject(j,"hmirror",hmirror);cJSON_AddBoolToObject(j,"vflip",vflip);
  cJSON_AddNumberToObject(j,"sent",sent);cJSON_AddNumberToObject(j,"rendered",rendered);cJSON_AddNumberToObject(j,"retries",retries);
  if(usb){cJSON_AddStringToObject(j,"ap",apName.c_str());cJSON_AddStringToObject(j,"code",deviceCode.c_str());}
  xSemaphoreGive(mutex);cJSON_AddBoolToObject(j,"wifi",WiFi.status()==WL_CONNECTED);cJSON_AddNumberToObject(j,"wifi_reason",wifiReason);xSemaphoreTake(mutex,portMAX_DELAY);cJSON_AddItemToObject(j,"networks",cJSON_Parse(visibleNetworks.c_str()));cJSON_AddNumberToObject(j,"networks_seen",visibleCount);xSemaphoreGive(mutex);String s=serialize(j);cJSON_Delete(j);return s;
@@ -184,11 +207,29 @@ void sendPreview(){
  unsigned char out[1032];for(size_t i=0;i<n;i+=768){size_t w=0;mbedtls_base64_encode(out,sizeof(out),&w,p+i,std::min<size_t>(768,n-i));Serial.write(out,w);}
  Serial.println("\"}");externalFree(p);
 }
+// One live frame per request: the page's request rate paces the stream, and each request keeps live view on 5 s.
+void sendLive(){
+ xSemaphoreTake(mutex,portMAX_DELAY);liveUntil=millis()+5000;if(!liveUntil)liveUntil=1;unsigned seen=liveSeq;bool busy=hasPending;xSemaphoreGive(mutex);
+ for(int i=0;i<60;++i){xSemaphoreTake(mutex,portMAX_DELAY);bool fresh=liveSeq!=seen&&liveLength;xSemaphoreGive(mutex);if(fresh||busy)break;delay(5);}
+ xSemaphoreTake(mutex,portMAX_DELAY);size_t n=liveLength;auto p=n?(uint8_t*)externalAlloc(n):nullptr;if(p)memcpy(p,liveImage,n);else n=0;
+ unsigned seq=liveSeq;NoteCapture::Frame f=liveMetrics;String error=liveError;float edgeMin=settings.limits.edgeMin;xSemaphoreGive(mutex);
+ cJSON* j=cJSON_CreateObject();cJSON_AddBoolToObject(j,"live",true);cJSON_AddNumberToObject(j,"seq",seq);cJSON_AddBoolToObject(j,"busy",busy);cJSON_AddStringToObject(j,"error",error.c_str());
+ cJSON_AddBoolToObject(j,"valid",f.valid);cJSON_AddNumberToObject(j,"mean",f.mean);cJSON_AddNumberToObject(j,"light",f.light);cJSON_AddNumberToObject(j,"ink",f.ink);
+ cJSON_AddNumberToObject(j,"edge",f.edge);cJSON_AddNumberToObject(j,"spread",f.spread);cJSON_AddNumberToObject(j,"edge_min",edgeMin);
+ String head=serialize(j);cJSON_Delete(j);head.remove(head.length()-1);Serial.print(head);Serial.print(",\"image\":\"");
+ unsigned char out[1032];for(size_t i=0;p&&i<n;i+=768){size_t w=0;mbedtls_base64_encode(out,sizeof(out),&w,p+i,std::min<size_t>(768,n-i));Serial.write(out,w);}
+ Serial.println("\"}");externalFree(p);
+}
 void serialCommand(const String& line){
  cJSON* j=cJSON_Parse(line.c_str());if(!j)return;String command=field(j,"cmd");
  if(command=="status")Serial.println(snapshot(true));
  else if(command=="scan")Serial.println(scanNetworks());
  else if(command=="preview")sendPreview();
+ else if(command=="live")sendLive();
+ else if(command=="orient"){auto h=cJSON_GetObjectItemCaseSensitive(j,"hmirror"),v=cJSON_GetObjectItemCaseSensitive(j,"vflip");
+  xSemaphoreTake(mutex,portMAX_DELAY);if(cJSON_IsBool(h))hmirror=cJSON_IsTrue(h);if(cJSON_IsBool(v))vflip=cJSON_IsTrue(v);orientChanged=true;
+  prefs.putBool("hmirror",hmirror);prefs.putBool("vflip",vflip);String r=String("{\"ok\":true,\"hmirror\":")+(hmirror?"true":"false")+",\"vflip\":"+(vflip?"true":"false")+"}";xSemaphoreGive(mutex);Serial.println(r);}
+ else if(command=="live_stop"){xSemaphoreTake(mutex,portMAX_DELAY);liveUntil=0;xSemaphoreGive(mutex);Serial.println("{\"ok\":true}");}
  else if(command=="test_camera")Serial.println(requestTest()?"{\"ok\":true}":"{\"ok\":false,\"detail\":\"Kamera meşgul.\"}");
  else if(command=="configure"){String error;bool ok=configure(j,error);cJSON* r=cJSON_CreateObject();cJSON_AddBoolToObject(r,"ok",ok);cJSON_AddStringToObject(r,"detail",ok?"Ayarlar kaydedildi; kamera yeniden başlıyor.":error.c_str());Serial.println(serialize(r));cJSON_Delete(r);}
  cJSON_Delete(j);
@@ -220,6 +261,7 @@ void worker(void*){
    xSemaphoreTake(mutex,portMAX_DELAY);if(settings.ssid==c.ssid){settings.ssid=joined;prefs.putString("ssid",joined);}xSemaphoreGive(mutex);}
   if(online&&!wasOnline){configTime(0,0,"pool.ntp.org","time.google.com");}
   wasOnline=online;xSemaphoreTake(mutex,portMAX_DELAY);networkIp=online?WiFi.localIP().toString():String();xSemaphoreGive(mutex);
+  if(!pending&&liveWanted()){runLive();policy.resetMotion();nextPreview=millis()+2000;continue;}
   if(pending){
    if(!online){status("waiting_wifi","İnternet bekleniyor; aynı fotoğraf bellekte korunuyor.");continue;}
    if(time(nullptr)<1767225600){status("waiting_clock","Güvenli bağlantı için saat eşitlemesi bekleniyor.");continue;}
@@ -300,7 +342,7 @@ void setup(){
  prefs.begin("not-camera",false);
  settings.ssid=prefs.getString("ssid","");settings.password=prefs.getString("password","");settings.token=prefs.getString("token","");
  settings.course=prefs.getString("course","Makroökonomie");settings.rules=prefs.getString("rules","");settings.limits.interval=prefs.getUInt("interval",15000);
- settings.limits.edgeMin=prefs.getFloat("edge",2);settings.limits.duplicateMax=prefs.getFloat("duplicate",8);settings.automatic=prefs.getBool("automatic",false);
+ settings.limits.edgeMin=prefs.getFloat("edge",2);settings.limits.duplicateMax=prefs.getFloat("duplicate",8);settings.automatic=prefs.getBool("automatic",false);hmirror=prefs.getBool("hmirror",true);vflip=prefs.getBool("vflip",false);
  // Only a device that never ran 0.1.1+ is switched off once; later updates keep the user's choice.
  if(prefs.getString("safe-version","").isEmpty()){settings.automatic=false;prefs.putBool("automatic",false);prefs.putString("safe-version",CAMERA_VERSION);}
  deviceCode=prefs.getString("code","");if(deviceCode.length()!=16){deviceCode=uuid();deviceCode.replace("-","");deviceCode=deviceCode.substring(0,16);prefs.putString("code",deviceCode);}
