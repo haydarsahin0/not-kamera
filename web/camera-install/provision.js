@@ -37,8 +37,8 @@ async function scan(){try{const r=await command({cmd:'scan'},j=>Array.isArray(j.
  const list=el('ssidList');if(list&&document.createElement)list.replaceChildren(...seen.map(n=>{const o=document.createElement('option');o.value=n;return o;}));
  if(el('ssid').value)el('ssid').value=exactSsid(el('ssid').value);return seen;}catch{return null;}}
 let orient={hmirror:true,vflip:false};
-function show(s){if(typeof s.hmirror==='boolean')orient={hmirror:s.hmirror,vflip:!!s.vflip};verified=s.device==='NotCamera'&&s.version==='0.1.9';el('save').disabled=!verified||s.busy;
- if(!verified){message(s.device==='NotCamera'?'Kamerada eski NotCamera '+s.version+' var. Ayar gönderilmedi. Önce 1. adımdan 0.1.9 yazılımını yükle.':'Seçilen cihaz NotCamera 0.1.9 değil. Ayar gönderilmedi. Kamera kartını ve yüklemeyi kontrol et.');return;}
+function show(s){if(typeof s.hmirror==='boolean')orient={hmirror:s.hmirror,vflip:!!s.vflip};verified=s.device==='NotCamera'&&s.version==='0.2.0';el('save').disabled=!verified||s.busy;
+ if(!verified){message(s.device==='NotCamera'?'Kamerada eski NotCamera '+s.version+' var. Ayar gönderilmedi. Önce 1. adımdan 0.2.0 yazılımını yükle.':'Seçilen cihaz NotCamera 0.2.0 değil. Ayar gönderilmedi. Kamera kartını ve yüklemeyi kontrol et.');return;}
  for(const key of ['ssid','course','rules','interval'])if(s[key]!==undefined)el(key).value=s[key];el('automatic').checked=!!s.automatic;if(el('sendPhoto'))el('sendPhoto').disabled=!s.held;
  message('NotCamera '+s.version+'\n'+s.detail+'\nKamera testi: '+(s.camera_ready?'başarılı':(s.camera_error||'henüz yapılmadı'))+'\nSensör: '+(s.sensor_active?'çekim yapıyor':'beklemede')+(s.temp?'\nKart sıcaklığı: '+Math.round(s.temp)+' °C'+(s.hot?' · ÇOK SICAK, kamera durduruldu':''):'')+'\nWi-Fi: '+(s.wifi?'bağlı':wifiText(s))+(s.ip?'\nHotspot adresi: http://'+s.ip:'')+(s.ap_active===false?'\nKamera ağı: kapalı (ısınmayı azaltmak için; hotspot adresinden açılır)\nKamera sayfası şifresi: '+s.code:'\nKamera ağı: '+s.ap+'\nKamera ağ şifresi: '+s.code)+'\nGönderilen: '+s.sent+' · Ekranda gösterilen: '+s.rendered);
 }
@@ -99,8 +99,8 @@ const statusOf=()=>ask({cmd:'status'},j=>j.device!==undefined,5000);
 el('shoot').onclick=async()=>{if(!verified||!connected){message('Önce USB’den kamerayı bul.');return;}
  live=false;el('shoot').disabled=true;el('sendPhoto').disabled=true;
  try{const before=await statusOf();await ask({cmd:'shoot'},j=>j.ok===true,5000);message('Fotoğraf çekiliyor…');let s;
-  for(let i=0;i<60;++i){await wait(500);s=await statusOf();if(s.held&&s.frame!==before.frame)break;if(s.phase==='camera_error')throw Error(s.detail);if(s.phase==='too_hot')throw Error(s.detail);}
-  if(!s||!s.held)throw Error('Fotoğraf çekilemedi; tekrar dene.');
+  for(let i=0;i<60;++i){await wait(500);s=await statusOf();if(s.held&&s.frame!==before.frame)break;if(s.phase==='camera_error')throw Error(s.detail);if(s.phase==='too_hot')throw Error(s.detail);message('Fotoğraf çekiliyor… (kamera: '+s.detail+')');}
+  if(!s||!s.held)throw Error('Fotoğraf 30 saniyede çekilemedi. Kameranın son durumu: '+(s?s.detail:'bilinmiyor')+'\nRESET’e basıp tekrar dene.');
   message('Fotoğraf çekildi; görüntü yükleniyor…');const r=await ask({cmd:'preview'},j=>typeof j.preview==='string',60000);
   if(r.preview){const img=el('preview');img.src='data:image/jpeg;base64,'+r.preview;if(img.style)img.style.display='block';}
   el('metrics').textContent='';el('sendPhoto').disabled=false;el('shoot').textContent='↺ Yeniden çek';

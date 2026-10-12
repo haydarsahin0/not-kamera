@@ -2,7 +2,7 @@
 import hashlib,json,os,pathlib,subprocess,zipfile
 root=pathlib.Path(__file__).resolve().parents[2]
 sketch=root/'firmware/NotCamera';build=root/'firmware/camera-build';out=root/'web/camera-install'
-version='0.1.9';cli=os.environ.get('ARDUINO_CLI','arduino-cli')
+version='0.2.0';cli=os.environ.get('ARDUINO_CLI','arduino-cli')
 (sketch/'cloud_roots.h').write_bytes((root/'firmware/NotEkran/cloud_roots.h').read_bytes())
 fqbn='esp32:esp32:XIAO_ESP32S3:PSRAM=opi,FlashSize=8M,PartitionScheme=default_8MB,USBMode=hwcdc,CDCOnBoot=default'
 # XIAO_ESP32S3 menu: CDCOnBoot=default is "Enabled" (Serial on USB); CDCOnBoot=cdc is "Disabled" (Serial on UART pins).
