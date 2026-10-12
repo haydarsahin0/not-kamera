@@ -16,13 +16,13 @@
 #include "cloud_roots.h"
 #include "setup_page.h"
 
-constexpr char CAMERA_VERSION[]="0.1.4";
+constexpr char CAMERA_VERSION[]="0.1.5";
 constexpr char API[]="https://jckoovsocynnxbrsalld.supabase.co/functions/v1/not-kamera-api";
 constexpr size_t MAX_JPEG=1024*1024,MAX_REPLY=160*1024;
 Preferences prefs;WebServer web(80);SemaphoreHandle_t mutex;
 String apName,deviceCode,csrf,phase="starting",detail="Kamera hazırlanıyor",currentJob,deliveryId;
 String networkIp;NoteCapture::Frame latestMetrics;bool cameraReady=false,hasPending=false,enabled=true;
-uint8_t* latestImage=nullptr;size_t latestLength=0;unsigned sent=0,rendered=0,retries=0;
+uint8_t* latestImage=nullptr;size_t latestLength=0;unsigned frameId=0;unsigned sent=0,rendered=0,retries=0;
 uint32_t rebootAt=0;bool rebootRequested=false,clearRequested=false,testRequested=false,sensorActive=false,cameraFault=false;
 String cameraError;
 // Last station disconnect reason (wifi_err_reason_t), 0 after an address is obtained; shown on the USB page.
@@ -45,7 +45,7 @@ void status(const String& state,const String& message){xSemaphoreTake(mutex,port
 Settings config(){xSemaphoreTake(mutex,portMAX_DELAY);Settings c=settings;xSemaphoreGive(mutex);return c;}
 void cacheImage(camera_fb_t* fb,const NoteCapture::Frame& f){
  if(!fb||fb->len>MAX_JPEG)return;auto p=(uint8_t*)externalAlloc(fb->len);if(!p)return;memcpy(p,fb->buf,fb->len);
- xSemaphoreTake(mutex,portMAX_DELAY);externalFree(latestImage);latestImage=p;latestLength=fb->len;latestMetrics=f;xSemaphoreGive(mutex);
+ xSemaphoreTake(mutex,portMAX_DELAY);externalFree(latestImage);latestImage=p;latestLength=fb->len;latestMetrics=f;++frameId;xSemaphoreGive(mutex);
 }
 NoteCapture::Frame measure(camera_fb_t* fb){
  NoteCapture::Frame frame;if(!fb||fb->format!=PIXFORMAT_JPEG)return frame;
@@ -129,7 +129,7 @@ String snapshot(bool usb=false){
  cJSON_AddStringToObject(j,"ssid",settings.ssid.c_str());cJSON_AddStringToObject(j,"ip",networkIp.c_str());
  cJSON_AddStringToObject(j,"course",settings.course.c_str());cJSON_AddStringToObject(j,"rules",settings.rules.c_str());
  cJSON_AddNumberToObject(j,"interval",settings.limits.interval/1000);cJSON_AddNumberToObject(j,"edge_min",settings.limits.edgeMin);cJSON_AddNumberToObject(j,"duplicate_max",settings.limits.duplicateMax);
- cJSON_AddNumberToObject(j,"mean",latestMetrics.mean);cJSON_AddNumberToObject(j,"light",latestMetrics.light);cJSON_AddNumberToObject(j,"ink",latestMetrics.ink);cJSON_AddNumberToObject(j,"edge",latestMetrics.edge);
+ cJSON_AddNumberToObject(j,"mean",latestMetrics.mean);cJSON_AddNumberToObject(j,"light",latestMetrics.light);cJSON_AddNumberToObject(j,"ink",latestMetrics.ink);cJSON_AddNumberToObject(j,"edge",latestMetrics.edge);cJSON_AddNumberToObject(j,"spread",latestMetrics.spread);cJSON_AddNumberToObject(j,"frame",frameId);
  cJSON_AddNumberToObject(j,"sent",sent);cJSON_AddNumberToObject(j,"rendered",rendered);cJSON_AddNumberToObject(j,"retries",retries);
  if(usb){cJSON_AddStringToObject(j,"ap",apName.c_str());cJSON_AddStringToObject(j,"code",deviceCode.c_str());}
  xSemaphoreGive(mutex);cJSON_AddBoolToObject(j,"wifi",WiFi.status()==WL_CONNECTED);cJSON_AddNumberToObject(j,"wifi_reason",wifiReason);xSemaphoreTake(mutex,portMAX_DELAY);cJSON_AddItemToObject(j,"networks",cJSON_Parse(visibleNetworks.c_str()));cJSON_AddNumberToObject(j,"networks_seen",visibleCount);xSemaphoreGive(mutex);String s=serialize(j);cJSON_Delete(j);return s;
@@ -176,10 +176,19 @@ String scanNetworks(){
  if(!online&&c.ssid.length())WiFi.begin((found.length()?found:c.ssid).c_str(),c.password.c_str());
  xSemaphoreTake(mutex,portMAX_DELAY);String out="{\"ok\":true,\"networks\":"+visibleNetworks+"}";xSemaphoreGive(mutex);return out;
 }
+// Streams the latest checked frame as one JSON line with base64 JPEG, so the USB page can show what the camera sees.
+void sendPreview(){
+ xSemaphoreTake(mutex,portMAX_DELAY);size_t n=latestLength;auto p=(uint8_t*)externalAlloc(n?n:1);if(p&&n)memcpy(p,latestImage,n);unsigned id=frameId;xSemaphoreGive(mutex);
+ if(!p||!n){externalFree(p);Serial.println("{\"frame\":0,\"preview\":\"\"}");return;}
+ Serial.print("{\"frame\":");Serial.print(id);Serial.print(",\"preview\":\"");
+ unsigned char out[1032];for(size_t i=0;i<n;i+=768){size_t w=0;mbedtls_base64_encode(out,sizeof(out),&w,p+i,std::min<size_t>(768,n-i));Serial.write(out,w);}
+ Serial.println("\"}");externalFree(p);
+}
 void serialCommand(const String& line){
  cJSON* j=cJSON_Parse(line.c_str());if(!j)return;String command=field(j,"cmd");
  if(command=="status")Serial.println(snapshot(true));
  else if(command=="scan")Serial.println(scanNetworks());
+ else if(command=="preview")sendPreview();
  else if(command=="test_camera")Serial.println(requestTest()?"{\"ok\":true}":"{\"ok\":false,\"detail\":\"Kamera meşgul.\"}");
  else if(command=="configure"){String error;bool ok=configure(j,error);cJSON* r=cJSON_CreateObject();cJSON_AddBoolToObject(r,"ok",ok);cJSON_AddStringToObject(r,"detail",ok?"Ayarlar kaydedildi; kamera yeniden başlıyor.":error.c_str());Serial.println(serialize(r));cJSON_Delete(r);}
  cJSON_Delete(j);
@@ -286,14 +295,14 @@ void worker(void*){
 
 void setup(){
  // USB setup sends whole settings lines; the default 256-byte USB receive queue drops overflow.
- Serial.setRxBufferSize(2048);Serial.begin(115200);setCpuFrequencyMhz(160);mutex=xSemaphoreCreateMutex();scanLock=xSemaphoreCreateMutex();
+ Serial.setRxBufferSize(2048);Serial.setTxBufferSize(4096);Serial.begin(115200);setCpuFrequencyMhz(160);mutex=xSemaphoreCreateMutex();scanLock=xSemaphoreCreateMutex();
  cJSON_Hooks hooks={externalAlloc,externalFree};cJSON_InitHooks(&hooks);
  prefs.begin("not-camera",false);
  settings.ssid=prefs.getString("ssid","");settings.password=prefs.getString("password","");settings.token=prefs.getString("token","");
  settings.course=prefs.getString("course","Makroökonomie");settings.rules=prefs.getString("rules","");settings.limits.interval=prefs.getUInt("interval",15000);
  settings.limits.edgeMin=prefs.getFloat("edge",2);settings.limits.duplicateMax=prefs.getFloat("duplicate",8);settings.automatic=prefs.getBool("automatic",false);
- // First boot after this safety update must not resume the old always-on setting.
- if(prefs.getString("safe-version","")!=CAMERA_VERSION){settings.automatic=false;prefs.putBool("automatic",false);prefs.putString("safe-version",CAMERA_VERSION);}
+ // Only a device that never ran 0.1.1+ is switched off once; later updates keep the user's choice.
+ if(prefs.getString("safe-version","").isEmpty()){settings.automatic=false;prefs.putBool("automatic",false);prefs.putString("safe-version",CAMERA_VERSION);}
  deviceCode=prefs.getString("code","");if(deviceCode.length()!=16){deviceCode=uuid();deviceCode.replace("-","");deviceCode=deviceCode.substring(0,16);prefs.putString("code",deviceCode);}
  csrf=uuid();uint64_t mac=ESP.getEfuseMac();char suffix[5];snprintf(suffix,5,"%04X",unsigned(mac&65535));apName="NotCamera-"+String(suffix);
  if(prefs.getBytesLength("recent")==sizeof(policy.recent)){prefs.getBytes("recent",&policy.recent,sizeof(policy.recent));if(policy.recent.count>8||policy.recent.next>7)policy.recent.clear();}

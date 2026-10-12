@@ -13,7 +13,7 @@ function noReply(){if(!received)return NO_REPLY;const log=noise.replace(/"code":
 function message(text){el('usbState').textContent=text;}
 function accept(line){let data;try{data=JSON.parse(line);}catch{if(line)noise=(noise+line+'\n').slice(-2000);return;}
  if(waiting&&waiting.match(data)){const w=waiting;waiting=null;clearTimeout(w.timer);w.resolve(data);}}
-async function readLoop(){let buffer='';const decoder=new TextDecoder();try{while(connected){const {value,done}=await reader.read();if(done)break;received+=value.length;buffer+=decoder.decode(value,{stream:true});let end;while((end=buffer.indexOf('\n'))>=0){accept(buffer.slice(0,end).trim());buffer=buffer.slice(end+1);}if(buffer.length>10000){noise=(noise+buffer.slice(-500)+'\n').slice(-2000);buffer='';}}}catch{}
+async function readLoop(){let buffer='';const decoder=new TextDecoder();try{while(connected){const {value,done}=await reader.read();if(done)break;received+=value.length;buffer+=decoder.decode(value,{stream:true});let end;while((end=buffer.indexOf('\n'))>=0){accept(buffer.slice(0,end).trim());buffer=buffer.slice(end+1);}if(buffer.length>4000000){noise=(noise+buffer.slice(-500)+'\n').slice(-2000);buffer='';}}}catch{}
  const lost=connected;connected=false;verified=false;el('save').disabled=true;if(waiting){waiting.reject(Error(lost?'USB bağlantısı kapandı. Kamera yeniden başlamış veya kablo gevşemiş olabilir. Birkaç saniye bekleyip tekrar dene; sürekli kopuyorsa kablo/güç sorununu kontrol et.':'USB bağlantısı kapandı.'));clearTimeout(waiting.timer);waiting=null;}}
 // The camera's USB receive queue holds only 256 bytes: long settings (token, rules) are sent in paced 64-byte packets.
 async function send(bytes){for(let i=0;i<bytes.length;i+=64){await writer.write(bytes.slice(i,i+64));if(i+64<bytes.length)await wait(20);}}
@@ -36,8 +36,8 @@ function exactSsid(name){return seen.find(n=>n===name)||seen.find(n=>plain(n)===
 async function scan(){try{const r=await command({cmd:'scan'},j=>Array.isArray(j.networks),15000);seen=r.networks.map(n=>n.ssid);
  const list=el('ssidList');if(list&&document.createElement)list.replaceChildren(...seen.map(n=>{const o=document.createElement('option');o.value=n;return o;}));
  if(el('ssid').value)el('ssid').value=exactSsid(el('ssid').value);return seen;}catch{return null;}}
-function show(s){verified=s.device==='NotCamera'&&s.version==='0.1.4';el('save').disabled=!verified||s.busy;
- if(!verified){message(s.device==='NotCamera'?'Kamerada eski NotCamera '+s.version+' var. Ayar gönderilmedi. Önce 1. adımdan 0.1.4 yazılımını yükle.':'Seçilen cihaz NotCamera 0.1.4 değil. Ayar gönderilmedi. Kamera kartını ve yüklemeyi kontrol et.');return;}
+function show(s){verified=s.device==='NotCamera'&&s.version==='0.1.5';el('save').disabled=!verified||s.busy;
+ if(!verified){message(s.device==='NotCamera'?'Kamerada eski NotCamera '+s.version+' var. Ayar gönderilmedi. Önce 1. adımdan 0.1.5 yazılımını yükle.':'Seçilen cihaz NotCamera 0.1.5 değil. Ayar gönderilmedi. Kamera kartını ve yüklemeyi kontrol et.');return;}
  for(const key of ['ssid','course','rules','interval'])if(s[key]!==undefined)el(key).value=s[key];// The user wants unattended capture: once the single-frame test passed, offer it pre-ticked.
  el('automatic').checked=!!s.automatic||!!s.camera_ready;
  message('NotCamera '+s.version+'\n'+s.detail+'\nKamera testi: '+(s.camera_ready?'başarılı':(s.camera_error||'henüz yapılmadı'))+'\nSensör: '+(s.sensor_active?'çekim yapıyor':'beklemede')+'\nWi-Fi: '+(s.wifi?'bağlı':wifiText(s))+(s.ip?'\nHotspot adresi: http://'+s.ip:'')+'\nKamera ağı: '+s.ap+'\nKamera ağ şifresi: '+s.code+'\nGönderilen: '+s.sent+' · Ekranda gösterilen: '+s.rendered);
@@ -62,3 +62,25 @@ el('setup').addEventListener('submit',async event=>{event.preventDefault();if(!v
 });
 
 el('testCamera').onclick=async()=>{if(!verified||!connected){message('Önce USB’den kamerayı bul.');return;}try{const r=await command({cmd:'test_camera'},j=>typeof j.ok==='boolean');if(!r.ok)throw Error(r.detail);message('Tek kare testi istendi. Birkaç saniye sonra USB’den kamerayı bul ile sonucu oku. Isınma devam ediyorsa gücü çıkar.');}catch(e){message(e.message);}};
+
+// Live view over USB: shows the latest frame the camera checked and why it passed or failed the photo rules.
+function metrics(s){if(!s.frame)return 'Henüz görüntü yok.';const e=Number(s.edge_min)||2,r=(ok,t)=>(ok?'✓ ':'✗ ')+t,tips=[];
+ if(s.mean<70||s.light<.5)tips.push('Daha fazla ışık ver: lambayı aç veya kâğıdı ışığa çevir; gölge düşürme.');
+ if(s.edge<e)tips.push('Görüntü bulanık veya soru çok küçük: kamerayı kâğıda yaklaştır (yaklaşık 20–30 cm), sabit tut.');
+ if(s.ink<.006)tips.push('Kadrajda yazı yok gibi: kamerayı soruya çevir.');if(s.ink>.48)tips.push('Kadraj çok koyu/dolu: kâğıdın tamamı beyaz zeminde görünsün.');
+ if(s.spread<35)tips.push('Kontrast düşük: beyaz kâğıt ve koyu yazı, düz ışık kullan.');
+ return [r(s.mean>=70,'Parlaklık '+Math.round(s.mean)+' (en az 70)'),r(s.light>=.5,'Aydınlık alan %'+Math.round(s.light*100)+' (en az %50)'),
+  r(s.ink>=.006&&s.ink<=.48,'Yazı oranı %'+(s.ink*100).toFixed(1)+' (%0,6–%48)'),r(s.edge>=e,'Netlik/ayrıntı '+Number(s.edge).toFixed(1)+' (en az '+e+')'),
+  r((s.spread??99)>=35,'Kontrast '+Math.round(s.spread??0)+' (en az 35)')].join('\n')+(tips.length?'\n\n'+tips.join('\n'):'\n\nGörüntü uygun.');}
+let live=false;
+el('livePreview').onclick=async()=>{if(live){live=false;return;}if(!verified||!connected){message('Önce USB’den kamerayı bul.');return;}
+ live=true;el('livePreview').textContent='Canlı görüntüyü durdur';let last=-1;
+ try{while(live&&connected){
+  let s=await command({cmd:'status'},j=>j.device!==undefined,5000);
+  // Without automatic capture the camera only takes a frame on request.
+  if(!s.automatic){await command({cmd:'test_camera'},j=>typeof j.ok==='boolean',5000).catch(()=>{});await wait(2500);s=await command({cmd:'status'},j=>j.device!==undefined,5000);}
+  el('metrics').textContent=metrics(s);
+  if(s.frame&&s.frame!==last){const r=await command({cmd:'preview'},j=>typeof j.preview==='string',30000);
+   if(r.preview){const img=el('preview');img.src='data:image/jpeg;base64,'+r.preview;if(img.style)img.style.display='block';last=r.frame;}}
+  await wait(s.automatic?2000:500);}}
+ catch(e){message(e.message);}finally{live=false;el('livePreview').textContent='Canlı görüntü · kameranın gördüğünü göster';}};
