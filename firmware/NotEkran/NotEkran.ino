@@ -4,6 +4,8 @@
 #include <Preferences.h>
 #include <Adafruit_GFX.h>
 #include <esp_system.h>
+#include <WiFiUdp.h>
+#include <mbedtls/sha256.h>
 #include "epaper_driver_bsp.h"
 #include "text_layout.h"
 #include "unicode_text.h"
@@ -121,9 +123,12 @@ void paint(){
   xSemaphoreTake(cloudLock,portMAX_DELAY);String detail=photoDetail;xSemaphoreGive(cloudLock);
   auto progress=wrapText(normalizeText(std::string(detail.c_str())),32);
   for(size_t n=0;n<progress.size()&&n<9;++n){canvas.setCursor(4,25+n*10);canvas.println(progress[n].c_str());}
+  xSemaphoreTake(cloudLock,portMAX_DELAY);bool camera=photoState.startsWith("camera");xSemaphoreGive(cloudLock);
+  if(camera){canvas.setCursor(4,147);canvas.println("NotCamera / PWR basili tut");canvas.setCursor(4,165);canvas.println("Hotspot acik kalsin");}
+  else{
   canvas.setCursor(4,135);canvas.println("Telefon: NotEkran agindan cik");
   canvas.setCursor(4,147);canvas.println("Kisisel erisim noktasini ac");
-  canvas.setCursor(4,165);canvas.println("Cihaz acik kalsin");
+  canvas.setCursor(4,165);canvas.println("Cihaz acik kalsin");}
  }else if(helpVisible){
   canvas.println("NOT EKRAN / V2");canvas.setCursor(4,23);canvas.println("Wi-Fi agi:");canvas.setCursor(4,35);canvas.println(apName);
   canvas.setCursor(4,55);canvas.println("Ag sifresi / giris kodu:");canvas.setCursor(4,67);canvas.println(devicePassword);
@@ -183,6 +188,39 @@ bool openHistory(std::string key){
  if(!history.checkpoint(key,page))return false;
  document=std::move(next);visibleKey=key;fontSize=source.size;currentPage=page;
  activeDelivery="";showPhotoProgress=false;helpVisible=false;dirty=true;rotation.pause();++textRevision;return true;
+}
+// NotCamera trigger: holding PWR for 1.2 s asks the NotCamera on the same hotspot to take a photo and upload it.
+// UDP broadcast keyed by a hash of the shared app access code (the code itself never leaves the device); the camera
+// acknowledges, and the answer then arrives through the cloud like any photo.
+constexpr uint16_t CAMERA_TRIGGER_PORT=47123,CAMERA_REPLY_PORT=47124;WiFiUDP cameraUdp;
+uint32_t cameraTriggerId=0,cameraAckBy=0,cameraProgressUntil=0;
+String cameraKey(const String& token){String text="notcamera-trigger:"+token;unsigned char d[32];
+ mbedtls_sha256((const unsigned char*)text.c_str(),text.length(),d,0);char hex[17];for(int i=0;i<8;++i)snprintf(hex+2*i,3,"%02x",d[i]);return String(hex);}
+void cameraMessage(const String& state,const String& detail,uint32_t showFor){photoUpdate(state,detail);showPhotoProgress=true;helpVisible=false;dirty=true;cameraProgressUntil=showFor?millis()+showFor:0;}
+void triggerCamera(){
+ if(visibility.hidden()){visibility.toggle();rotation.pause();navigation=ButtonNavigation();}
+ xSemaphoreTake(cloudLock,portMAX_DELAY);String token=cloudToken;xSemaphoreGive(cloudLock);
+ if(token.isEmpty()){cameraMessage("camera_error","Kamera icin once uygulama erisim kodunu kaydet.",8000);return;}
+ if(WiFi.status()!=WL_CONNECTED){cameraMessage("camera_error","Hotspot bagli degil; kamera tetiklenemedi.",8000);return;}
+ cameraTriggerId=(esp_random()&0x7fffffff)|1;
+ String packet="{\"t\":\"notcamera-shoot\",\"id\":"+String(cameraTriggerId)+",\"k\":\""+cameraKey(token)+"\"}";
+ // UDP can drop a packet: send a few copies (the camera ignores repeats of the same id).
+ IPAddress targets[]={IPAddress(255,255,255,255),WiFi.broadcastIP()};
+ for(int round=0;round<3;++round){for(auto ip:targets){cameraUdp.beginPacket(ip,CAMERA_TRIGGER_PORT);cameraUdp.print(packet);cameraUdp.endPacket();}delay(80);}
+ cameraAckBy=millis()+3000;cameraMessage("camera","Kamera fotograf cekiyor...",0);
+}
+void pollCamera(){
+ int size=cameraUdp.parsePacket();
+ if(size>0&&size<300){char buf[301];int n=cameraUdp.read(buf,300);buf[n>0?n:0]=0;cJSON* j=cJSON_Parse(buf);
+  if(j){auto t=cJSON_GetObjectItemCaseSensitive(j,"t"),id=cJSON_GetObjectItemCaseSensitive(j,"id"),ok=cJSON_GetObjectItemCaseSensitive(j,"ok"),detail=cJSON_GetObjectItemCaseSensitive(j,"detail");
+   if(cJSON_IsString(t)&&String(t->valuestring)=="notcamera-ack"&&cJSON_IsNumber(id)&&uint32_t(id->valuedouble)==cameraTriggerId&&cameraAckBy){
+    cameraAckBy=0;if(cJSON_IsTrue(ok))cameraMessage("camera","Kamera cekti ve gonderiyor. Cevap birazdan burada.",120000);
+    else cameraMessage("camera_error",cJSON_IsString(detail)?String(detail->valuestring):String("Kamera fotograf cekemedi."),8000);}
+   cJSON_Delete(j);}}
+ else if(size>0)cameraUdp.flush();
+ if(cameraAckBy&&int32_t(millis()-cameraAckBy)>=0){cameraAckBy=0;cameraMessage("camera_error","Kamera bulunamadi. NotCamera acik ve ayni hotspota bagli mi?",8000);}
+ // Leave the camera message after a while (an arriving answer replaces it earlier).
+ if(cameraProgressUntil&&int32_t(millis()-cameraProgressUntil)>=0){cameraProgressUntil=0;if(showPhotoProgress){showPhotoProgress=false;dirty=true;}}
 }
 void setup(){
  pinMode(BATTERY_HOLD,OUTPUT);digitalWrite(BATTERY_HOLD,HIGH);
@@ -321,6 +359,7 @@ void setup(){
   if(history.current())openHistory(history.current()->key);redirect();
  });
  server.onNotFound([]{server.send(404,"text/plain","Not found");});
+ cameraUdp.begin(CAMERA_REPLY_PORT);
  server.begin();paint();
 }
 void loop(){
@@ -333,6 +372,8 @@ void loop(){
  if(powerButton.update(digitalRead(PWR_KEY)==LOW,millis())){
   visibility.toggle();rotation.pause();navigation=ButtonNavigation();dirty=true;
  }
+ if(powerButton.held(millis()))triggerCamera();
+ pollCamera();
  if(connectPending){connectPending=false;WiFi.disconnect(false,false);WiFi.begin(savedSsid.c_str(),savedPassword.c_str());lastRetry=millis();}
  xSemaphoreTake(cloudLock,portMAX_DELAY);uint32_t revision=photoRevision;String state=photoState;xSemaphoreGive(cloudLock);
  if(revision!=shownPhotoRevision){shownPhotoRevision=revision;if(showPhotoProgress){if(state=="rendered")showPhotoProgress=false;dirty=true;}}

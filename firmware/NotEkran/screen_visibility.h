@@ -24,15 +24,18 @@ class ScreenVisibility {
 // during startup, and do not repeat while holding the button.
 class ScreenPowerButton {
  bool raw=false,stable=false,armed=false;
- uint32_t changedAt=0;
+ uint32_t changedAt=0,downAt=0;
  public:
- void begin(bool down,uint32_t now){raw=stable=down;armed=!down;changedAt=now;}
+ void begin(bool down,uint32_t now){raw=stable=down;armed=!down;changedAt=now;downAt=now;}
  bool waiting() const {return raw||stable;}
+ // Short press released: toggle the screen.
  bool update(bool down,uint32_t now){
   if(down!=raw){raw=down;changedAt=now;}
   if(raw==stable||uint32_t(now-changedAt)<35)return false;
   stable=raw;
-  if(stable){armed=true;return false;}
+  if(stable){armed=true;downAt=now;return false;}
   const bool click=armed;armed=false;return click;
  }
+ // Held for `ms`: fires once while still down, and the release no longer counts as a click (NotCamera trigger).
+ bool held(uint32_t now,uint32_t ms=1200){if(stable&&armed&&uint32_t(now-downAt)>=ms){armed=false;return true;}return false;}
 };

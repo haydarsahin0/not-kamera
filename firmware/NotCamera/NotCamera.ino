@@ -11,12 +11,14 @@
 #include <esp_system.h>
 #include <cJSON.h>
 #include <mbedtls/base64.h>
+#include <mbedtls/sha256.h>
+#include <WiFiUdp.h>
 #include <time.h>
 #include "capture_policy.h"
 #include "cloud_roots.h"
 #include "setup_page.h"
 
-constexpr char CAMERA_VERSION[]="0.1.9";
+constexpr char CAMERA_VERSION[]="0.2.0";
 constexpr char API[]="https://jckoovsocynnxbrsalld.supabase.co/functions/v1/not-kamera-api";
 constexpr size_t MAX_JPEG=3*1024*1024,MAX_REPLY=160*1024;
 Preferences prefs;WebServer web(80);SemaphoreHandle_t mutex;
@@ -99,8 +101,28 @@ constexpr float HOT_C=72,COOL_C=60;float chipTemp=0;bool hot=false;
 // Manual mode: first press (USB page or the board's BOOT key) takes a photo and holds it, second press uploads it.
 // No photo rules are applied to a held photo; the user decides.
 constexpr int BOOT_KEY=0,USER_LED=21;  // XIAO ESP32-S3: BOOT button, orange user LED (active low)
-bool shootRequested=false,sendRequested=false;uint8_t* heldImage=nullptr;size_t heldLength=0;NoteCapture::Signature heldSignature{};
+bool shootRequested=false,sendRequested=false,sendAfterShoot=false;uint8_t* heldImage=nullptr;size_t heldLength=0;NoteCapture::Signature heldSignature{};
 void pressButton(){xSemaphoreTake(mutex,portMAX_DELAY);if(heldImage)sendRequested=true;else shootRequested=true;xSemaphoreGive(mutex);}
+// NotEkran trigger: a long press on NotEkran's PWR key broadcasts a UDP request on the shared hotspot. It carries a
+// hash of the shared app access code (never the code itself), so only the owner's NotEkran can trigger this camera.
+// The camera takes a photo, uploads it at once and acknowledges, so NotEkran can say whether the camera was reached.
+constexpr uint16_t TRIGGER_PORT=47123;WiFiUDP trigger;String triggerKey;uint32_t lastTriggerId=0;
+String triggerKeyFor(const String& token){if(token.isEmpty())return String();String text="notcamera-trigger:"+token;unsigned char d[32];
+ mbedtls_sha256((const unsigned char*)text.c_str(),text.length(),d,0);char hex[17];for(int i=0;i<8;++i)snprintf(hex+2*i,3,"%02x",d[i]);return String(hex);}
+void pollTrigger(){
+ int size=trigger.parsePacket();if(size<=0)return;if(size>300){trigger.flush();return;}
+ char buf[301];int n=trigger.read(buf,300);if(n<=0)return;buf[n]=0;cJSON* j=cJSON_Parse(buf);if(!j)return;
+ auto id=cJSON_GetObjectItemCaseSensitive(j,"id");uint32_t tid=cJSON_IsNumber(id)?uint32_t(id->valuedouble):0;
+ if(field(j,"t")=="notcamera-shoot"&&tid&&triggerKey.length()&&field(j,"k")==triggerKey){
+  const char* why=nullptr;xSemaphoreTake(mutex,portMAX_DELAY);
+  if(hot)why="Kamera cok sicak; sogumasini bekle.";else if(tid!=lastTriggerId){lastTriggerId=tid;shootRequested=true;sendAfterShoot=true;}
+  xSemaphoreGive(mutex);
+  cJSON* r=cJSON_CreateObject();cJSON_AddStringToObject(r,"t","notcamera-ack");cJSON_AddNumberToObject(r,"id",tid);cJSON_AddBoolToObject(r,"ok",!why);
+  cJSON_AddStringToObject(r,"detail",why?why:"Kamera fotograf cekiyor ve gonderiyor.");String out=serialize(r);cJSON_Delete(r);
+  trigger.beginPacket(trigger.remoteIP(),trigger.remotePort());trigger.print(out);trigger.endPacket();
+ }
+ cJSON_Delete(j);
+}
 // Live size chosen on the USB page: 0 best (sensor maximum, OV3660 2048x1536), 1 balanced 1024x768, 2 fast 640x480.
 int liveMode=0;
 uint32_t liveUntil=0;uint8_t* liveImage=nullptr;size_t liveLength=0;unsigned liveSeq=0;NoteCapture::Frame liveMetrics;String liveError;
@@ -253,7 +275,7 @@ void serialCommand(const String& line){
  else if(command=="scan")Serial.println(scanNetworks());
  else if(command=="preview")sendPreview();
  else if(command=="live")sendLive(j);
- else if(command=="shoot"){xSemaphoreTake(mutex,portMAX_DELAY);shootRequested=true;xSemaphoreGive(mutex);Serial.println("{\"ok\":true}");}
+ else if(command=="shoot"){xSemaphoreTake(mutex,portMAX_DELAY);shootRequested=true;sendAfterShoot=false;xSemaphoreGive(mutex);Serial.println("{\"ok\":true}");}
  else if(command=="send"){Settings c=config();xSemaphoreTake(mutex,portMAX_DELAY);
   const char* why=!heldImage?"Önce fotoğraf çek.":hasPending?"Önceki fotoğraf hâlâ işleniyor; cevabı bekle.":(c.ssid.isEmpty()||!validToken(c.token))?"Önce hotspot ve uygulama erişim kodunu kaydet.":nullptr;
   if(!why)sendRequested=true;xSemaphoreGive(mutex);
@@ -310,8 +332,13 @@ void worker(void*){
    if(h&&!hot)WiFi.setTxPower(WIFI_POWER_8_5dBm);else if(!h&&hot)WiFi.setTxPower(WIFI_POWER_13dBm);
    xSemaphoreTake(mutex,portMAX_DELAY);chipTemp=t;hot=h;xSemaphoreGive(mutex);}
   if(hot&&!pending){status("too_hot","Kart çok ısındı ("+String(chipTemp,0)+" °C). Soğuyana kadar kamera ve çekim durduruldu; gerekirse gücü çıkar.");continue;}
-  xSemaphoreTake(mutex,portMAX_DELAY);bool shoot=shootRequested&&!pending;if(shoot)shootRequested=false;bool send=sendRequested&&heldImage&&!pending;if(send)sendRequested=false;xSemaphoreGive(mutex);
-  if(shoot){takeHeld();nextPreview=millis()+8000;continue;}
+  xSemaphoreTake(mutex,portMAX_DELAY);bool shootNow=shootRequested;xSemaphoreGive(mutex);
+  // A new press replaces a photo still waiting for upload, its answer or NotEkran's display: the user moved on.
+  if(shootNow&&pending){delete pending;pending=nullptr;xSemaphoreTake(mutex,portMAX_DELAY);hasPending=false;xSemaphoreGive(mutex);policy.resetMotion();}
+  xSemaphoreTake(mutex,portMAX_DELAY);bool shoot=shootRequested&&!pending;if(shoot)shootRequested=false;bool autoSend=shoot&&sendAfterShoot;if(shoot)sendAfterShoot=false;bool send=sendRequested&&heldImage&&!pending;if(send)sendRequested=false;xSemaphoreGive(mutex);
+  if(shoot){takeHeld();nextPreview=millis()+8000;
+   if(autoSend){xSemaphoreTake(mutex,portMAX_DELAY);if(heldImage)sendRequested=true;xSemaphoreGive(mutex);}
+   continue;}
   if(send){
    auto candidate=new Pending();xSemaphoreTake(mutex,portMAX_DELAY);candidate->image=heldImage;candidate->length=heldLength;candidate->signature=heldSignature;
    heldImage=nullptr;heldLength=0;hasPending=true;currentJob="";xSemaphoreGive(mutex);
@@ -412,6 +439,7 @@ void setup(){
  if(settings.ssid.length()){WiFi.mode(WIFI_STA);WiFi.setAutoReconnect(true);WiFi.setSleep(WIFI_PS_MIN_MODEM);WiFi.begin(settings.ssid.c_str(),settings.password.c_str());}
  else {WiFi.mode(WIFI_AP_STA);WiFi.setAutoReconnect(true);WiFi.softAP(apName.c_str(),deviceCode.c_str());}
  WiFi.setTxPower(WIFI_POWER_13dBm);
+ triggerKey=triggerKeyFor(settings.token);trigger.begin(TRIGGER_PORT);
  const char* headers[]={"X-CSRF"};web.collectHeaders(headers,1);
  web.on("/",HTTP_GET,[]{if(!authorized())return;String html=FPSTR(SETUP_PAGE);html.replace("__CSRF__",csrf);web.sendHeader("Cache-Control","no-store");web.sendHeader("X-Frame-Options","DENY");web.send(200,"text/html; charset=utf-8",html);});
  web.on("/api/status",HTTP_GET,[]{if(!authorized())return;web.sendHeader("Cache-Control","no-store");web.send(200,"application/json",snapshot());});
@@ -424,7 +452,7 @@ void setup(){
  if(xTaskCreatePinnedToCore(worker,"camera",24576,nullptr,1,nullptr,1)!=pdPASS)status("worker_error","Kamera görevi başlatılamadı; bellek yetersiz.");
 }
 void loop(){
- web.handleClient();
+ web.handleClient();pollTrigger();
  // BOOT key: a short press (40 ms - 3 s) shoots, or sends the held photo. LED on: photo held; blinking: sending/answer pending.
  static bool wasDown=false;static uint32_t downAt=0;bool down=digitalRead(BOOT_KEY)==LOW;
  if(down&&!wasDown)downAt=millis();if(!down&&wasDown&&uint32_t(millis()-downAt)>40&&uint32_t(millis()-downAt)<3000)pressButton();wasDown=down;

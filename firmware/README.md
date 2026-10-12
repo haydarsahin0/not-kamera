@@ -1,4 +1,6 @@
-# Not Ekran V2 — 0.10.2
+# Not Ekran V2 — 0.10.3
+
+**0.10.3:** PWR 1,2 s gedrückt halten → die NotCamera im selben Hotspot fotografiert und sendet; die Antwort erscheint hier. Kurzer Druck schaltet den Bildschirm wie bisher. UDP-Broadcast (Port 47123) mit einem Hash des App-Zugangscodes; die Kamera bestätigt an Port 47124.
 
 Diese Version ist für das Waveshare ESP32-S3-ePaper-1.54 V2 mit 8 MB Flash und 8 MB PSRAM.
 
@@ -10,10 +12,10 @@ Die KI soll die kürzeste vollständige Antwort geben: ein Satz für eine Defini
 
 ## Update installieren
 
-1. [Installationsseite](https://haydarsahin0.github.io/not-kamera/install/?v=0.10.2) in Windows Chrome oder Edge öffnen.
+1. [Installationsseite](https://haydarsahin0.github.io/not-kamera/install/?v=0.10.3) in Windows Chrome oder Edge öffnen.
 2. Das Gerät mit einem USB-Datenkabel anschließen und den passenden USB-Anschluss wählen.
 3. Beim Update **Erase device / Gerät löschen ausgeschaltet lassen**, damit Einstellungen und Antwortverlauf erhalten bleiben.
-4. Bis zum Abschluss warten. Danach zeigt die lokale Geräteseite Version 0.10.2.
+4. Bis zum Abschluss warten. Danach zeigt die lokale Geräteseite Version 0.10.3.
 
 Für den Wechsel nach 50 Sekunden ist dieses USB-Update nötig. Die neuen Antwortregeln wirken auf neue Fotos bereits über den Server. Das Update kann nicht über iPhone oder iPad installiert werden.
 

@@ -5,7 +5,7 @@ from pathlib import Path
 root = Path(__file__).resolve().parents[2] / 'web/install'
 manifest = json.loads((root / 'manifest.json').read_text())
 info = json.loads((root / 'build-info.json').read_text())
-assert manifest['version'] == info['version'] == '0.10.2'
+assert manifest['version'] == info['version'] == '0.10.3'
 assert info['offset'] == 0x10000 and info['hardware_tested'] is False
 parts = manifest['builds'][0]['parts']
 assert len(parts) == len(info['parts']) == 4
