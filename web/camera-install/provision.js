@@ -37,10 +37,9 @@ async function scan(){try{const r=await command({cmd:'scan'},j=>Array.isArray(j.
  const list=el('ssidList');if(list&&document.createElement)list.replaceChildren(...seen.map(n=>{const o=document.createElement('option');o.value=n;return o;}));
  if(el('ssid').value)el('ssid').value=exactSsid(el('ssid').value);return seen;}catch{return null;}}
 let orient={hmirror:true,vflip:false};
-function show(s){if(typeof s.hmirror==='boolean')orient={hmirror:s.hmirror,vflip:!!s.vflip};verified=s.device==='NotCamera'&&s.version==='0.1.7';el('save').disabled=!verified||s.busy;
- if(!verified){message(s.device==='NotCamera'?'Kamerada eski NotCamera '+s.version+' var. Ayar gönderilmedi. Önce 1. adımdan 0.1.7 yazılımını yükle.':'Seçilen cihaz NotCamera 0.1.7 değil. Ayar gönderilmedi. Kamera kartını ve yüklemeyi kontrol et.');return;}
- for(const key of ['ssid','course','rules','interval'])if(s[key]!==undefined)el(key).value=s[key];// The user wants unattended capture: once the single-frame test passed, offer it pre-ticked.
- el('automatic').checked=!!s.automatic||!!s.camera_ready;
+function show(s){if(typeof s.hmirror==='boolean')orient={hmirror:s.hmirror,vflip:!!s.vflip};verified=s.device==='NotCamera'&&s.version==='0.1.9';el('save').disabled=!verified||s.busy;
+ if(!verified){message(s.device==='NotCamera'?'Kamerada eski NotCamera '+s.version+' var. Ayar gönderilmedi. Önce 1. adımdan 0.1.9 yazılımını yükle.':'Seçilen cihaz NotCamera 0.1.9 değil. Ayar gönderilmedi. Kamera kartını ve yüklemeyi kontrol et.');return;}
+ for(const key of ['ssid','course','rules','interval'])if(s[key]!==undefined)el(key).value=s[key];el('automatic').checked=!!s.automatic;if(el('sendPhoto'))el('sendPhoto').disabled=!s.held;
  message('NotCamera '+s.version+'\n'+s.detail+'\nKamera testi: '+(s.camera_ready?'başarılı':(s.camera_error||'henüz yapılmadı'))+'\nSensör: '+(s.sensor_active?'çekim yapıyor':'beklemede')+(s.temp?'\nKart sıcaklığı: '+Math.round(s.temp)+' °C'+(s.hot?' · ÇOK SICAK, kamera durduruldu':''):'')+'\nWi-Fi: '+(s.wifi?'bağlı':wifiText(s))+(s.ip?'\nHotspot adresi: http://'+s.ip:'')+(s.ap_active===false?'\nKamera ağı: kapalı (ısınmayı azaltmak için; hotspot adresinden açılır)\nKamera sayfası şifresi: '+s.code:'\nKamera ağı: '+s.ap+'\nKamera ağ şifresi: '+s.code)+'\nGönderilen: '+s.sent+' · Ekranda gösterilen: '+s.rendered);
 }
 el('usbConnect').onclick=async()=>{el('usbConnect').disabled=true;try{if(!navigator.serial)throw Error('USB kurulumu için Windows Chrome/Edge kullan.');
@@ -74,16 +73,16 @@ function metrics(s){if(!s.frame)return 'Henüz görüntü yok.';const e=Number(s
   r(s.ink>=.006&&s.ink<=.48,'Yazı oranı %'+(s.ink*100).toFixed(1)+' (%0,6–%48)'),r(s.edge>=e,'Netlik/ayrıntı '+Number(s.edge).toFixed(1)+' (en az '+e+')'),
   r((s.spread??99)>=35,'Kontrast '+Math.round(s.spread??0)+' (en az 35)')].join('\n')+(tips.length?'\n\n'+tips.join('\n'):'\n\nGörüntü uygun.');}
 let live=false;
-// Streams 640x480 frames one request at a time; the rules are re-checked on the live frames while aiming.
+// Streams frames (sensor maximum by default, smaller on request) one request at a time; the rules are re-checked on the live frames while aiming.
 el('livePreview').onclick=async()=>{if(live){live=false;return;}if(!verified||!connected){message('Önce USB’den kamerayı bul.');return;}
  live=true;el('livePreview').textContent='Canlı görüntüyü durdur';let last=-1,shown=0,since=Date.now();const img=el('preview');
- try{while(live&&connected){const r=await command({cmd:'live'},j=>j.live===true,8000);
+ try{while(live&&connected){const r=await command({cmd:'live',size:Number(el('liveSize').value)||0},j=>j.live===true,20000);
   if(r.hot){el('metrics').textContent='Kart çok ısındı ('+Math.round(r.temp)+' °C). Soğuyunca canlı görüntü kendiliğinden açılır; gerekirse gücü çıkar.';await wait(2000);continue;}
   if(r.busy){el('metrics').textContent='Kamera şu an bir fotoğrafı işliyor; canlı görüntü cevap gelince açılır.';await wait(1000);continue;}
   if(r.error){el('metrics').textContent='Kamera açılamadı: '+r.error;await wait(1000);continue;}
   if(r.image&&r.seq!==last){img.src='data:image/jpeg;base64,'+r.image;if(img.style)img.style.display='block';last=r.seq;++shown;}
   if(r.valid){const fps=shown/Math.max(1,(Date.now()-since)/1000);el('metrics').textContent=metrics({...r,frame:1})+'\n\nCanlı: saniyede '+fps.toFixed(1)+' kare'+(r.temp?' · kart '+Math.round(r.temp)+' °C':'');}
-  if(!r.image)await wait(200);}}
+  if(!r.image)await wait(30);}}
  catch(e){message(e.message);}
  finally{live=false;el('livePreview').textContent='Canlı görüntü · kameranın gördüğünü göster';if(connected)command({cmd:'live_stop'},j=>j.ok===true,3000).catch(()=>{});}};
 // Mirror/flip are saved on the camera and apply to live view and real photos alike.
@@ -93,3 +92,23 @@ async function turn(key){if(!verified||!connected){message('Önce USB’den kame
  // The live loop may be waiting for a frame: retry briefly instead of failing with "wait for the previous USB task".
  for(let i=0;;++i){try{const r=await send();orient={hmirror:r.hmirror,vflip:r.vflip};return;}catch(e){if(i>=20||!/Önceki USB/.test(e.message)){message(e.message);return;}await wait(150);}}}
 el('mirrorH').onclick=()=>turn('hmirror');el('mirrorV').onclick=()=>turn('vflip');
+// Manual photo: “Fotoğraf çek” takes a full-size photo and shows it; “Gönder” uploads it and follows it to NotEkran.
+// The board's BOOT key does the same without the computer.
+async function ask(payload,match,timeout){for(let i=0;;++i){try{return await command(payload,match,timeout);}catch(e){if(i>=40||!/Önceki USB/.test(e.message))throw e;await wait(150);}}}
+const statusOf=()=>ask({cmd:'status'},j=>j.device!==undefined,5000);
+el('shoot').onclick=async()=>{if(!verified||!connected){message('Önce USB’den kamerayı bul.');return;}
+ live=false;el('shoot').disabled=true;el('sendPhoto').disabled=true;
+ try{const before=await statusOf();await ask({cmd:'shoot'},j=>j.ok===true,5000);message('Fotoğraf çekiliyor…');let s;
+  for(let i=0;i<60;++i){await wait(500);s=await statusOf();if(s.held&&s.frame!==before.frame)break;if(s.phase==='camera_error')throw Error(s.detail);if(s.phase==='too_hot')throw Error(s.detail);}
+  if(!s||!s.held)throw Error('Fotoğraf çekilemedi; tekrar dene.');
+  message('Fotoğraf çekildi; görüntü yükleniyor…');const r=await ask({cmd:'preview'},j=>typeof j.preview==='string',60000);
+  if(r.preview){const img=el('preview');img.src='data:image/jpeg;base64,'+r.preview;if(img.style)img.style.display='block';}
+  el('metrics').textContent='';el('sendPhoto').disabled=false;el('shoot').textContent='↺ Yeniden çek';
+  message('Fotoğraf çekildi. Yazı okunuyorsa “Bu fotoğrafı gönder”e bas; değilse yeniden çek.');}
+ catch(e){message(e.message);}finally{el('shoot').disabled=false;}};
+el('sendPhoto').onclick=async()=>{if(!verified||!connected){message('Önce USB’den kamerayı bul.');return;}el('sendPhoto').disabled=true;
+ try{const r=await ask({cmd:'send'},j=>typeof j.ok==='boolean',5000);if(!r.ok)throw Error(r.detail||'Gönderilemedi.');el('shoot').textContent='📷 Fotoğraf çek';
+  for(let i=0;i<300;++i){await wait(1000);const s=await statusOf();message('Gönderim: '+s.detail+(s.wifi?'':'\nWi-Fi: '+wifiText(s)));
+   if(s.phase==='delivered'||s.phase==='superseded'){message('✓ Cevap NotEkran’da gösterildi. Yeni soru için tekrar “Fotoğraf çek”e bas.');return;}
+   if(['upload_error','analysis_error','access_error'].includes(s.phase))return;}}
+ catch(e){message(e.message);el('sendPhoto').disabled=false;}};

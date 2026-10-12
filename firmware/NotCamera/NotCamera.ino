@@ -16,7 +16,7 @@
 #include "cloud_roots.h"
 #include "setup_page.h"
 
-constexpr char CAMERA_VERSION[]="0.1.7";
+constexpr char CAMERA_VERSION[]="0.1.9";
 constexpr char API[]="https://jckoovsocynnxbrsalld.supabase.co/functions/v1/not-kamera-api";
 constexpr size_t MAX_JPEG=3*1024*1024,MAX_REPLY=160*1024;
 Preferences prefs;WebServer web(80);SemaphoreHandle_t mutex;
@@ -96,17 +96,27 @@ bool hmirror=true,vflip=false,orientChanged=false;
 void applyOrientation(){auto sensor=esp_camera_sensor_get();if(!sensor)return;xSemaphoreTake(mutex,portMAX_DELAY);bool h=hmirror,v=vflip;orientChanged=false;xSemaphoreGive(mutex);sensor->set_hmirror(sensor,h);sensor->set_vflip(sensor,v);}
 // Overheat guard on the chip's own sensor: above HOT_C the camera and capture stop until it cools to COOL_C.
 constexpr float HOT_C=72,COOL_C=60;float chipTemp=0;bool hot=false;
+// Manual mode: first press (USB page or the board's BOOT key) takes a photo and holds it, second press uploads it.
+// No photo rules are applied to a held photo; the user decides.
+constexpr int BOOT_KEY=0,USER_LED=21;  // XIAO ESP32-S3: BOOT button, orange user LED (active low)
+bool shootRequested=false,sendRequested=false;uint8_t* heldImage=nullptr;size_t heldLength=0;NoteCapture::Signature heldSignature{};
+void pressButton(){xSemaphoreTake(mutex,portMAX_DELAY);if(heldImage)sendRequested=true;else shootRequested=true;xSemaphoreGive(mutex);}
+// Live size chosen on the USB page: 0 best (sensor maximum, OV3660 2048x1536), 1 balanced 1024x768, 2 fast 640x480.
+int liveMode=0;
 uint32_t liveUntil=0;uint8_t* liveImage=nullptr;size_t liveLength=0;unsigned liveSeq=0;NoteCapture::Frame liveMetrics;String liveError;
 bool liveWanted(){xSemaphoreTake(mutex,portMAX_DELAY);bool on=liveUntil&&int32_t(liveUntil-millis())>0;xSemaphoreGive(mutex);return on;}
 void runLive(){
- setCpuFrequencyMhz(160);
- if(!initCamera(FRAMESIZE_VGA,14,2,CAMERA_GRAB_LATEST)){setCpuFrequencyMhz(80);xSemaphoreTake(mutex,portMAX_DELAY);liveError=detail;xSemaphoreGive(mutex);vTaskDelay(pdMS_TO_TICKS(2000));return;}
+ setCpuFrequencyMhz(160);xSemaphoreTake(mutex,portMAX_DELAY);int mode=liveMode;xSemaphoreGive(mutex);
+ bool ok=mode==2?initCamera(FRAMESIZE_VGA,12,2,CAMERA_GRAB_LATEST):mode==1?initCamera(FRAMESIZE_XGA,10,2,CAMERA_GRAB_LATEST):initCamera(FRAMESIZE_INVALID,8,2,CAMERA_GRAB_LATEST);
+ if(!ok){setCpuFrequencyMhz(80);xSemaphoreTake(mutex,portMAX_DELAY);liveError=detail;xSemaphoreGive(mutex);vTaskDelay(pdMS_TO_TICKS(2000));return;}
  xSemaphoreTake(mutex,portMAX_DELAY);sensorActive=true;cameraReady=true;liveError="";xSemaphoreGive(mutex);status("live","Canlı görüntü açık; otomatik çekim bekliyor.");
- for(unsigned n=0;liveWanted()&&!hot;++n){
+ auto modeSame=[mode]{xSemaphoreTake(mutex,portMAX_DELAY);bool same=liveMode==mode&&!shootRequested;xSemaphoreGive(mutex);return same;};
+ // A size change ends this window; the worker reopens the sensor at the new size.
+ for(unsigned n=0;liveWanted()&&!hot&&modeSame();++n){
   xSemaphoreTake(mutex,portMAX_DELAY);bool turn=orientChanged;xSemaphoreGive(mutex);if(turn)applyOrientation();
   camera_fb_t* fb=esp_camera_fb_get();if(!fb){vTaskDelay(pdMS_TO_TICKS(20));continue;}
-  // 640x480 at 1/4 scale is close to the 1600x1200 at 1/8 used for real photos, so the rules read alike.
-  NoteCapture::Frame f;bool measured=n%3==0;if(measured)f=measure(fb,JPEG_IMAGE_SCALE_1_4);
+  // Thumbnail about 160-256 px wide, like the 1/8 scale used for real photos, so the rules read alike.
+  NoteCapture::Frame f;bool measured=n%3==0;if(measured)f=measure(fb,fb->width<=800?JPEG_IMAGE_SCALE_1_4:JPEG_IMAGE_SCALE_1_8);
   auto copy=(uint8_t*)externalAlloc(fb->len);if(copy)memcpy(copy,fb->buf,fb->len);size_t len=fb->len;esp_camera_fb_return(fb);
   xSemaphoreTake(mutex,portMAX_DELAY);if(copy){externalFree(liveImage);liveImage=copy;liveLength=len;++liveSeq;}if(measured)liveMetrics=f;xSemaphoreGive(mutex);
   vTaskDelay(pdMS_TO_TICKS(15));
@@ -166,7 +176,7 @@ String snapshot(bool usb=false){
  cJSON_AddStringToObject(j,"ssid",settings.ssid.c_str());cJSON_AddStringToObject(j,"ip",networkIp.c_str());
  cJSON_AddStringToObject(j,"course",settings.course.c_str());cJSON_AddStringToObject(j,"rules",settings.rules.c_str());
  cJSON_AddNumberToObject(j,"interval",settings.limits.interval/1000);cJSON_AddNumberToObject(j,"edge_min",settings.limits.edgeMin);cJSON_AddNumberToObject(j,"duplicate_max",settings.limits.duplicateMax);
- cJSON_AddNumberToObject(j,"mean",latestMetrics.mean);cJSON_AddNumberToObject(j,"light",latestMetrics.light);cJSON_AddNumberToObject(j,"ink",latestMetrics.ink);cJSON_AddNumberToObject(j,"edge",latestMetrics.edge);cJSON_AddNumberToObject(j,"spread",latestMetrics.spread);cJSON_AddNumberToObject(j,"frame",frameId);cJSON_AddBoolToObject(j,"hmirror",hmirror);cJSON_AddNumberToObject(j,"temp",chipTemp);cJSON_AddBoolToObject(j,"hot",hot);cJSON_AddBoolToObject(j,"vflip",vflip);
+ cJSON_AddNumberToObject(j,"mean",latestMetrics.mean);cJSON_AddNumberToObject(j,"light",latestMetrics.light);cJSON_AddNumberToObject(j,"ink",latestMetrics.ink);cJSON_AddNumberToObject(j,"edge",latestMetrics.edge);cJSON_AddNumberToObject(j,"spread",latestMetrics.spread);cJSON_AddNumberToObject(j,"frame",frameId);cJSON_AddBoolToObject(j,"hmirror",hmirror);cJSON_AddBoolToObject(j,"held",heldImage!=nullptr);cJSON_AddNumberToObject(j,"temp",chipTemp);cJSON_AddBoolToObject(j,"hot",hot);cJSON_AddBoolToObject(j,"vflip",vflip);
  cJSON_AddNumberToObject(j,"sent",sent);cJSON_AddNumberToObject(j,"rendered",rendered);cJSON_AddNumberToObject(j,"retries",retries);
  cJSON_AddBoolToObject(j,"ap_active",WiFi.getMode()&WIFI_MODE_AP);
  if(usb){cJSON_AddStringToObject(j,"ap",apName.c_str());cJSON_AddStringToObject(j,"code",deviceCode.c_str());}
@@ -223,10 +233,12 @@ void sendPreview(){
  Serial.println("\"}");externalFree(p);
 }
 // One live frame per request: the page's request rate paces the stream, and each request keeps live view on 5 s.
-void sendLive(){
- xSemaphoreTake(mutex,portMAX_DELAY);liveUntil=millis()+5000;if(!liveUntil)liveUntil=1;unsigned seen=liveSeq;bool busy=hasPending;xSemaphoreGive(mutex);
- for(int i=0;i<60;++i){xSemaphoreTake(mutex,portMAX_DELAY);bool fresh=liveSeq!=seen&&liveLength;xSemaphoreGive(mutex);if(fresh||busy)break;delay(5);}
- xSemaphoreTake(mutex,portMAX_DELAY);size_t n=liveLength;auto p=n?(uint8_t*)externalAlloc(n):nullptr;if(p)memcpy(p,liveImage,n);else n=0;
+void sendLive(cJSON* request){
+ auto size=cJSON_GetObjectItemCaseSensitive(request,"size");int mode=cJSON_IsNumber(size)?std::clamp(size->valueint,0,2):0;
+ xSemaphoreTake(mutex,portMAX_DELAY);liveMode=mode;liveUntil=millis()+5000;if(!liveUntil)liveUntil=1;unsigned seen=liveSeq;bool busy=hasPending;xSemaphoreGive(mutex);
+ bool fresh=false;for(int i=0;i<60;++i){xSemaphoreTake(mutex,portMAX_DELAY);fresh=liveSeq!=seen&&liveLength;xSemaphoreGive(mutex);if(fresh||busy)break;delay(5);}
+ // Large frames are slow over USB: never resend a frame the page already has.
+ xSemaphoreTake(mutex,portMAX_DELAY);size_t n=fresh?liveLength:0;auto p=n?(uint8_t*)externalAlloc(n):nullptr;if(p)memcpy(p,liveImage,n);else n=0;
  unsigned seq=liveSeq;NoteCapture::Frame f=liveMetrics;String error=liveError;float edgeMin=settings.limits.edgeMin;xSemaphoreGive(mutex);
  cJSON* j=cJSON_CreateObject();cJSON_AddBoolToObject(j,"live",true);cJSON_AddBoolToObject(j,"hot",hot);cJSON_AddNumberToObject(j,"temp",chipTemp);cJSON_AddNumberToObject(j,"seq",seq);cJSON_AddBoolToObject(j,"busy",busy);cJSON_AddStringToObject(j,"error",error.c_str());
  cJSON_AddBoolToObject(j,"valid",f.valid);cJSON_AddNumberToObject(j,"mean",f.mean);cJSON_AddNumberToObject(j,"light",f.light);cJSON_AddNumberToObject(j,"ink",f.ink);
@@ -240,7 +252,12 @@ void serialCommand(const String& line){
  if(command=="status")Serial.println(snapshot(true));
  else if(command=="scan")Serial.println(scanNetworks());
  else if(command=="preview")sendPreview();
- else if(command=="live")sendLive();
+ else if(command=="live")sendLive(j);
+ else if(command=="shoot"){xSemaphoreTake(mutex,portMAX_DELAY);shootRequested=true;xSemaphoreGive(mutex);Serial.println("{\"ok\":true}");}
+ else if(command=="send"){Settings c=config();xSemaphoreTake(mutex,portMAX_DELAY);
+  const char* why=!heldImage?"Önce fotoğraf çek.":hasPending?"Önceki fotoğraf hâlâ işleniyor; cevabı bekle.":(c.ssid.isEmpty()||!validToken(c.token))?"Önce hotspot ve uygulama erişim kodunu kaydet.":nullptr;
+  if(!why)sendRequested=true;xSemaphoreGive(mutex);
+  cJSON* r=cJSON_CreateObject();cJSON_AddBoolToObject(r,"ok",!why);if(why)cJSON_AddStringToObject(r,"detail",why);Serial.println(serialize(r));cJSON_Delete(r);}
  else if(command=="orient"){auto h=cJSON_GetObjectItemCaseSensitive(j,"hmirror"),v=cJSON_GetObjectItemCaseSensitive(j,"vflip");
   xSemaphoreTake(mutex,portMAX_DELAY);if(cJSON_IsBool(h))hmirror=cJSON_IsTrue(h);if(cJSON_IsBool(v))vflip=cJSON_IsTrue(v);orientChanged=true;
   prefs.putBool("hmirror",hmirror);prefs.putBool("vflip",vflip);String r=String("{\"ok\":true,\"hmirror\":")+(hmirror?"true":"false")+",\"vflip\":"+(vflip?"true":"false")+"}";xSemaphoreGive(mutex);Serial.println(r);}
@@ -259,6 +276,19 @@ struct Pending {
  uint32_t updated=0;unsigned attempts=0;bool uploaded=false,done=false,blocked=false;
  ~Pending(){externalFree(image);}
 };
+// Takes three full-size frames and holds the sharpest one for the user's confirmation.
+void takeHeld(){
+ status("capturing","Fotoğraf çekiliyor…");CameraWindow window;if(!window.ok)return;
+ for(int warm=0;warm<4;++warm){auto frame=esp_camera_fb_get();if(frame)esp_camera_fb_return(frame);vTaskDelay(pdMS_TO_TICKS(80));}
+ uint8_t* bytes=nullptr;size_t length=0;NoteCapture::Signature signature{};float best=-1;
+ for(int i=0;i<3;++i){camera_fb_t* fb=esp_camera_fb_get();if(fb){auto measured=measure(fb);
+   if(fb->len<=MAX_JPEG&&(!bytes||measured.score>best)){auto copy=(uint8_t*)externalAlloc(fb->len);
+    if(copy){memcpy(copy,fb->buf,fb->len);externalFree(bytes);bytes=copy;length=fb->len;signature=measured.signature;best=measured.score;cacheImage(fb,measured);}}
+   esp_camera_fb_return(fb);}vTaskDelay(pdMS_TO_TICKS(120));}
+ if(!bytes){status("camera_error","Fotoğraf alınamadı; tekrar dene.");return;}
+ xSemaphoreTake(mutex,portMAX_DELAY);externalFree(heldImage);heldImage=bytes;heldLength=length;heldSignature=signature;sendRequested=false;xSemaphoreGive(mutex);
+ status("held","Fotoğraf çekildi. Göndermek için tekrar bas (sayfadaki “Gönder” veya karttaki BOOT tuşu).");
+}
 void worker(void*){
  Pending* pending=nullptr;uint32_t nextPreview=0,nextCloud=0,lastReconnect=0;bool wasOnline=false;String joined;uint32_t nextTemp=0;
  status("setup","İlk kurulum için USB sayfasından ayarları kaydet.");
@@ -280,6 +310,13 @@ void worker(void*){
    if(h&&!hot)WiFi.setTxPower(WIFI_POWER_8_5dBm);else if(!h&&hot)WiFi.setTxPower(WIFI_POWER_13dBm);
    xSemaphoreTake(mutex,portMAX_DELAY);chipTemp=t;hot=h;xSemaphoreGive(mutex);}
   if(hot&&!pending){status("too_hot","Kart çok ısındı ("+String(chipTemp,0)+" °C). Soğuyana kadar kamera ve çekim durduruldu; gerekirse gücü çıkar.");continue;}
+  xSemaphoreTake(mutex,portMAX_DELAY);bool shoot=shootRequested&&!pending;if(shoot)shootRequested=false;bool send=sendRequested&&heldImage&&!pending;if(send)sendRequested=false;xSemaphoreGive(mutex);
+  if(shoot){takeHeld();nextPreview=millis()+8000;continue;}
+  if(send){
+   auto candidate=new Pending();xSemaphoreTake(mutex,portMAX_DELAY);candidate->image=heldImage;candidate->length=heldLength;candidate->signature=heldSignature;
+   heldImage=nullptr;heldLength=0;hasPending=true;currentJob="";xSemaphoreGive(mutex);
+   candidate->requestId=uuid();candidate->updated=millis();pending=candidate;nextCloud=millis();policy.started(now);
+   status("uploading","Fotoğraf gönderiliyor.");continue;}
   if(!pending&&liveWanted()){runLive();policy.resetMotion();nextPreview=millis()+2000;continue;}
   if(pending){
    if(!online){status("waiting_wifi","İnternet bekleniyor; aynı fotoğraf bellekte korunuyor.");continue;}
@@ -320,7 +357,9 @@ void worker(void*){
   if(!test){
    if(fault)continue;
    if(c.ssid.isEmpty()||!validToken(c.token)){status("setup","Kurulum bekleniyor; görüntü alma durduruldu. USB'den bağlantıyı ve tek kareyi test edebilirsin.");continue;}
-   if(!c.automatic){status("paused","Otomatik çekim kapalı; sensör beklemede. Önce tek kare testi yap.");continue;}
+   if(!c.automatic){xSemaphoreTake(mutex,portMAX_DELAY);bool held=heldImage;
+    // Keep the last result (answer shown, upload/analysis/camera error) visible until the next press.
+    bool result=phase=="delivered"||phase=="superseded"||phase=="upload_error"||phase=="analysis_error"||phase=="camera_error";xSemaphoreGive(mutex);if(!held&&!result)status("ready","Hazır. Fotoğraf çekmek için bas (sayfadaki “Fotoğraf çek” veya karttaki BOOT tuşu); ikinci basış gönderir.");continue;}
    if(!online){status("waiting_wifi","Hotspot bekleniyor; görüntü alma durduruldu.");continue;}
    if(time(nullptr)<1767225600){status("waiting_clock","Saat eşitleniyor; görüntü alma durduruldu.");continue;}
    if(int32_t(now-nextPreview)<0)continue;
@@ -356,7 +395,8 @@ void worker(void*){
 
 void setup(){
  // USB setup sends whole settings lines; the default 256-byte USB receive queue drops overflow.
- Serial.setRxBufferSize(2048);Serial.setTxBufferSize(4096);Serial.begin(115200);setCpuFrequencyMhz(80);mutex=xSemaphoreCreateMutex();scanLock=xSemaphoreCreateMutex();
+ pinMode(BOOT_KEY,INPUT_PULLUP);pinMode(USER_LED,OUTPUT);digitalWrite(USER_LED,HIGH);
+ Serial.setRxBufferSize(2048);Serial.setTxBufferSize(16384);Serial.begin(115200);setCpuFrequencyMhz(80);mutex=xSemaphoreCreateMutex();scanLock=xSemaphoreCreateMutex();
  cJSON_Hooks hooks={externalAlloc,externalFree};cJSON_InitHooks(&hooks);
  prefs.begin("not-camera",false);
  settings.ssid=prefs.getString("ssid","");settings.password=prefs.getString("password","");settings.token=prefs.getString("token","");
@@ -384,7 +424,11 @@ void setup(){
  if(xTaskCreatePinnedToCore(worker,"camera",24576,nullptr,1,nullptr,1)!=pdPASS)status("worker_error","Kamera görevi başlatılamadı; bellek yetersiz.");
 }
 void loop(){
- web.handleClient();static String input;static bool discard=false;
+ web.handleClient();
+ // BOOT key: a short press (40 ms - 3 s) shoots, or sends the held photo. LED on: photo held; blinking: sending/answer pending.
+ static bool wasDown=false;static uint32_t downAt=0;bool down=digitalRead(BOOT_KEY)==LOW;
+ if(down&&!wasDown)downAt=millis();if(!down&&wasDown&&uint32_t(millis()-downAt)>40&&uint32_t(millis()-downAt)<3000)pressButton();wasDown=down;
+ xSemaphoreTake(mutex,portMAX_DELAY);bool held=heldImage,busy=hasPending;xSemaphoreGive(mutex);digitalWrite(USER_LED,(held||(busy&&(millis()/300)%2))?LOW:HIGH);static String input;static bool discard=false;
  while(Serial.available()>0){char c=Serial.read();if(c=='\n'){if(!discard&&input.length())serialCommand(input);input="";discard=false;}else if(c!='\r'){if(input.length()<6000&&!discard)input+=c;else {input="";discard=true;}}}
  xSemaphoreTake(mutex,portMAX_DELAY);bool reboot=rebootRequested&&int32_t(millis()-rebootAt)>=0;xSemaphoreGive(mutex);
  if(reboot){Serial.flush();ESP.restart();}delay(2);

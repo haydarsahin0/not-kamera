@@ -1,3 +1,12 @@
+## 0.1.9 — manual shoot / send
+
+- Without automatic capture, the photo rules no longer decide: the first press (setup page “Fotoğraf çek” or the board's BOOT key) takes three full-size frames and holds the sharpest; the page shows it. The second press (“Bu fotoğrafı gönder” or BOOT) uploads it; the answer goes to NotEkran as before. The orange user LED is on while a photo is held and blinks while it is being answered.
+- Automatic capture stays available as an option and is no longer pre-ticked.
+
+## 0.1.8 — full-resolution live view
+
+- Live view defaults to the sensor's full size (OV3660 2048×1536, quality 8), like the photos; the setup page offers balanced 1024×768 and fast 640×480. A size change reopens the sensor. Frames the page already has are never resent, and the USB TX buffer is 16 KB, so large frames arrive as fast as USB allows.
+
 ## 0.1.7 — highest photo quality, less heat
 
 - Photos: the sensor's largest JPEG size is detected once (OV2640 1600×1200, OV3660 2048×1536, OV5640 2592×1944) at JPEG quality 8 (was 10), up to 3 MB (server limit 4 MB). Each capture still takes three frames and sends the best one; white balance/AEC/gain/lens correction on, one more warm-up frame.
@@ -40,13 +49,13 @@
 - USB opens with DTR asserted/RTS released and retries one timed-out status query. Test button requests one local frame, without uploading it.
 - Real board temperature, USB recovery, sensor restart/image quality still require physical tests. If the device overheats while capture is paused, disconnect it and check hardware; software cannot certify it safe.
 
-# NotCamera 0.1.7 — ilk deneme sürümü
+# NotCamera 0.1.9 — ilk deneme sürümü
 
 Seeed Studio XIAO ESP32-S3 **Sense**, 8 MB Flash ve 8 MB PSRAM için hazırlanmıştır. Sensörün en büyük JPEG boyutunu kullanır: OV2640 1600×1200, OV3660 2048×1536, OV5640 2592×1944. Düz XIAO, ESP32-C3 ve Waveshare NotEkran için değildir. Kamera modülü ve üreticinin Wi-Fi anteni takılı olmalıdır.
 
 ## Yükleme
 
-Windows Chrome/Edge'de `https://haydarsahin0.github.io/not-kamera/camera-install/?v=0.1.7` adresini aç. Kamera kartını veri aktarabilen USB-C kabloyla bağla. İlk bölümde kamera yazılımını yükle. NotEkran'a bu dosyayı yükleme.
+Windows Chrome/Edge'de `https://haydarsahin0.github.io/not-kamera/camera-install/?v=0.1.9` adresini aç. Kamera kartını veri aktarabilen USB-C kabloyla bağla. İlk bölümde kamera yazılımını yükle. NotEkran'a bu dosyayı yükleme.
 
 Yükleyicinin seri konsolunu kapat. Gerekirse kameranın RESET tuşuna bir kez bas. İkinci bölümde USB bağlantısını seçip kamera bilgilerini oku. Hotspot adını/şifresini ve NotEkran'da zaten kullandığın **uygulama erişim kodunu** bir kez kaydet. OpenAI API anahtarını buraya girme. Kurulum bilgileri herkese açık siteye veya GitHub'a gönderilmez; tarayıcıdan USB üzerinden kameraya yazılır.
 
