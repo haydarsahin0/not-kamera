@@ -2,7 +2,7 @@
 import hashlib,json,os,pathlib,subprocess,zipfile
 root=pathlib.Path(__file__).resolve().parents[2]
 sketch=root/'firmware/NotCamera';build=root/'firmware/camera-build';out=root/'web/camera-install'
-version='0.1.6';cli=os.environ.get('ARDUINO_CLI','arduino-cli')
+version='0.1.7';cli=os.environ.get('ARDUINO_CLI','arduino-cli')
 (sketch/'cloud_roots.h').write_bytes((root/'firmware/NotEkran/cloud_roots.h').read_bytes())
 fqbn='esp32:esp32:XIAO_ESP32S3:PSRAM=opi,FlashSize=8M,PartitionScheme=default_8MB,USBMode=hwcdc,CDCOnBoot=default'
 # XIAO_ESP32S3 menu: CDCOnBoot=default is "Enabled" (Serial on USB); CDCOnBoot=cdc is "Disabled" (Serial on UART pins).
@@ -16,7 +16,7 @@ for name,offset,data in parts:
     assert end<=0x9000 or start>=0xe000,'Flash operation would erase NVS settings'
     (out/name).write_bytes(data);meta.append(dict(path=name,offset=offset,bytes=len(data),sha256=hashlib.sha256(data).hexdigest()))
 manifest=dict(name='NotCamera XIAO Sense',version=version,new_install_prompt_erase=False,new_install_improv_wait_time=0,builds=[dict(chipFamily='ESP32-S3',improv=False,parts=[dict(path=p['path']+'?v='+version,offset=p['offset']) for p in meta])])
-info=dict(version=version,board='Seeed Studio XIAO ESP32-S3 Sense (8MB Flash/8MB OPI PSRAM)',sensor='OV2640 or OV3660, configured 1600x1200 JPEG',arduino_esp32='3.3.0',fqbn=fqbn,parts=meta,hardware_tested=False)
+info=dict(version=version,board='Seeed Studio XIAO ESP32-S3 Sense (8MB Flash/8MB OPI PSRAM)',sensor='OV2640 1600x1200, OV3660 2048x1536 or OV5640 2592x1944 JPEG (largest size detected)',arduino_esp32='3.3.0',fqbn=fqbn,parts=meta,hardware_tested=False)
 (out/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n');(out/'build-info.json').write_text(json.dumps(info,indent=2)+'\n')
 with zipfile.ZipFile(build/f'not-camera-{version}.zip','w',zipfile.ZIP_DEFLATED) as z:
     for p in sorted(sketch.glob('*')):
