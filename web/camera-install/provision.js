@@ -37,11 +37,11 @@ async function scan(){try{const r=await command({cmd:'scan'},j=>Array.isArray(j.
  const list=el('ssidList');if(list&&document.createElement)list.replaceChildren(...seen.map(n=>{const o=document.createElement('option');o.value=n;return o;}));
  if(el('ssid').value)el('ssid').value=exactSsid(el('ssid').value);return seen;}catch{return null;}}
 let orient={hmirror:true,vflip:false};
-function show(s){if(typeof s.hmirror==='boolean')orient={hmirror:s.hmirror,vflip:!!s.vflip};verified=s.device==='NotCamera'&&s.version==='0.1.6';el('save').disabled=!verified||s.busy;
- if(!verified){message(s.device==='NotCamera'?'Kamerada eski NotCamera '+s.version+' var. Ayar gönderilmedi. Önce 1. adımdan 0.1.6 yazılımını yükle.':'Seçilen cihaz NotCamera 0.1.6 değil. Ayar gönderilmedi. Kamera kartını ve yüklemeyi kontrol et.');return;}
+function show(s){if(typeof s.hmirror==='boolean')orient={hmirror:s.hmirror,vflip:!!s.vflip};verified=s.device==='NotCamera'&&s.version==='0.1.7';el('save').disabled=!verified||s.busy;
+ if(!verified){message(s.device==='NotCamera'?'Kamerada eski NotCamera '+s.version+' var. Ayar gönderilmedi. Önce 1. adımdan 0.1.7 yazılımını yükle.':'Seçilen cihaz NotCamera 0.1.7 değil. Ayar gönderilmedi. Kamera kartını ve yüklemeyi kontrol et.');return;}
  for(const key of ['ssid','course','rules','interval'])if(s[key]!==undefined)el(key).value=s[key];// The user wants unattended capture: once the single-frame test passed, offer it pre-ticked.
  el('automatic').checked=!!s.automatic||!!s.camera_ready;
- message('NotCamera '+s.version+'\n'+s.detail+'\nKamera testi: '+(s.camera_ready?'başarılı':(s.camera_error||'henüz yapılmadı'))+'\nSensör: '+(s.sensor_active?'çekim yapıyor':'beklemede')+'\nWi-Fi: '+(s.wifi?'bağlı':wifiText(s))+(s.ip?'\nHotspot adresi: http://'+s.ip:'')+'\nKamera ağı: '+s.ap+'\nKamera ağ şifresi: '+s.code+'\nGönderilen: '+s.sent+' · Ekranda gösterilen: '+s.rendered);
+ message('NotCamera '+s.version+'\n'+s.detail+'\nKamera testi: '+(s.camera_ready?'başarılı':(s.camera_error||'henüz yapılmadı'))+'\nSensör: '+(s.sensor_active?'çekim yapıyor':'beklemede')+(s.temp?'\nKart sıcaklığı: '+Math.round(s.temp)+' °C'+(s.hot?' · ÇOK SICAK, kamera durduruldu':''):'')+'\nWi-Fi: '+(s.wifi?'bağlı':wifiText(s))+(s.ip?'\nHotspot adresi: http://'+s.ip:'')+(s.ap_active===false?'\nKamera ağı: kapalı (ısınmayı azaltmak için; hotspot adresinden açılır)\nKamera sayfası şifresi: '+s.code:'\nKamera ağı: '+s.ap+'\nKamera ağ şifresi: '+s.code)+'\nGönderilen: '+s.sent+' · Ekranda gösterilen: '+s.rendered);
 }
 el('usbConnect').onclick=async()=>{el('usbConnect').disabled=true;try{if(!navigator.serial)throw Error('USB kurulumu için Windows Chrome/Edge kullan.');
  if(!connected){await close();received=0;noise='';try{port=await navigator.serial.requestPort({filters:FILTERS});await port.open({baudRate:115200});}catch(e){port=null;throw Error(openError(e));}message('Kamera bağlantı noktası açıldı; cevap bekleniyor…');if(port.setSignals)await port.setSignals({dataTerminalReady:true,requestToSend:false});reader=port.readable.getReader();writer=port.writable.getWriter();connected=true;readLoop();await new Promise(r=>setTimeout(r,600));}
@@ -78,10 +78,11 @@ let live=false;
 el('livePreview').onclick=async()=>{if(live){live=false;return;}if(!verified||!connected){message('Önce USB’den kamerayı bul.');return;}
  live=true;el('livePreview').textContent='Canlı görüntüyü durdur';let last=-1,shown=0,since=Date.now();const img=el('preview');
  try{while(live&&connected){const r=await command({cmd:'live'},j=>j.live===true,8000);
+  if(r.hot){el('metrics').textContent='Kart çok ısındı ('+Math.round(r.temp)+' °C). Soğuyunca canlı görüntü kendiliğinden açılır; gerekirse gücü çıkar.';await wait(2000);continue;}
   if(r.busy){el('metrics').textContent='Kamera şu an bir fotoğrafı işliyor; canlı görüntü cevap gelince açılır.';await wait(1000);continue;}
   if(r.error){el('metrics').textContent='Kamera açılamadı: '+r.error;await wait(1000);continue;}
   if(r.image&&r.seq!==last){img.src='data:image/jpeg;base64,'+r.image;if(img.style)img.style.display='block';last=r.seq;++shown;}
-  if(r.valid){const fps=shown/Math.max(1,(Date.now()-since)/1000);el('metrics').textContent=metrics({...r,frame:1})+'\n\nCanlı: saniyede '+fps.toFixed(1)+' kare';}
+  if(r.valid){const fps=shown/Math.max(1,(Date.now()-since)/1000);el('metrics').textContent=metrics({...r,frame:1})+'\n\nCanlı: saniyede '+fps.toFixed(1)+' kare'+(r.temp?' · kart '+Math.round(r.temp)+' °C':'');}
   if(!r.image)await wait(200);}}
  catch(e){message(e.message);}
  finally{live=false;el('livePreview').textContent='Canlı görüntü · kameranın gördüğünü göster';if(connected)command({cmd:'live_stop'},j=>j.ok===true,3000).catch(()=>{});}};

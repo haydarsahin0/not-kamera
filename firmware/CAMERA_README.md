@@ -1,3 +1,9 @@
+## 0.1.7 — highest photo quality, less heat
+
+- Photos: the sensor's largest JPEG size is detected once (OV2640 1600×1200, OV3660 2048×1536, OV5640 2592×1944) at JPEG quality 8 (was 10), up to 3 MB (server limit 4 MB). Each capture still takes three frames and sends the best one; white balance/AEC/gain/lens correction on, one more warm-up frame.
+- Heat (board hot within 1–2 minutes): the camera's own access point now runs only before a hotspot is configured (an AP keeps the radio awake); station mode uses modem sleep and 13 dBm TX power; CPU runs at 80 MHz (160 MHz only during live view).
+- Overheat guard: chip temperature is read every 5 s; at ≥72 °C the camera, capture and live view stop and TX power drops until it cools to 60 °C. Temperature is shown on the USB page.
+
 ## 0.1.6 — smooth live view
 
 - Images were mirrored (text read backwards). Horizontal mirror is now on by default; USB `orient` (setup page buttons) toggles mirror/flip, saved in NVS and applied to live view and photos.
@@ -34,13 +40,13 @@
 - USB opens with DTR asserted/RTS released and retries one timed-out status query. Test button requests one local frame, without uploading it.
 - Real board temperature, USB recovery, sensor restart/image quality still require physical tests. If the device overheats while capture is paused, disconnect it and check hardware; software cannot certify it safe.
 
-# NotCamera 0.1.6 — ilk deneme sürümü
+# NotCamera 0.1.7 — ilk deneme sürümü
 
-Seeed Studio XIAO ESP32-S3 **Sense**, 8 MB Flash ve 8 MB PSRAM için hazırlanmıştır. OV2640 veya OV3660 ile 1600×1200 JPEG kullanır. Düz XIAO, ESP32-C3 ve Waveshare NotEkran için değildir. Kamera modülü ve üreticinin Wi-Fi anteni takılı olmalıdır.
+Seeed Studio XIAO ESP32-S3 **Sense**, 8 MB Flash ve 8 MB PSRAM için hazırlanmıştır. Sensörün en büyük JPEG boyutunu kullanır: OV2640 1600×1200, OV3660 2048×1536, OV5640 2592×1944. Düz XIAO, ESP32-C3 ve Waveshare NotEkran için değildir. Kamera modülü ve üreticinin Wi-Fi anteni takılı olmalıdır.
 
 ## Yükleme
 
-Windows Chrome/Edge'de `https://haydarsahin0.github.io/not-kamera/camera-install/?v=0.1.6` adresini aç. Kamera kartını veri aktarabilen USB-C kabloyla bağla. İlk bölümde kamera yazılımını yükle. NotEkran'a bu dosyayı yükleme.
+Windows Chrome/Edge'de `https://haydarsahin0.github.io/not-kamera/camera-install/?v=0.1.7` adresini aç. Kamera kartını veri aktarabilen USB-C kabloyla bağla. İlk bölümde kamera yazılımını yükle. NotEkran'a bu dosyayı yükleme.
 
 Yükleyicinin seri konsolunu kapat. Gerekirse kameranın RESET tuşuna bir kez bas. İkinci bölümde USB bağlantısını seçip kamera bilgilerini oku. Hotspot adını/şifresini ve NotEkran'da zaten kullandığın **uygulama erişim kodunu** bir kez kaydet. OpenAI API anahtarını buraya girme. Kurulum bilgileri herkese açık siteye veya GitHub'a gönderilmez; tarayıcıdan USB üzerinden kameraya yazılır.
 
@@ -49,6 +55,8 @@ Kamera yeniden başladıktan sonra aynı bilgileri her açılışta kullanır. i
 ## Kullanım
 
 Bu güncellemenin ilk açılışında otomatik çekim kapalıdır. Tek kare testi ve ısınma kontrolü sonrasında ayarlardan açılabilir. Açıldıktan sonra güç verildiğinde kayıtlı ayarla devam eder. İlk fotoğraf uygun yeni görüntü oluşunca alınır. Sonraki çekimler arasında varsayılan olarak en az 15 saniye vardır; her 15 saniyede koşulsuz fotoğraf göndermez. Karanlık, boş veya ayrıntısı yetersiz görüntüde bekler. Yaklaşık sekiz saniyelik aralıklarla görüntü kontrolünden sonra üç kare içinden daha uygun olanını seçer. Gönderilen fotoğrafın cevabı NotEkran tarafından gösterilene kadar yeni fotoğraf göndermez. Ekran pil görünümündeyse cevap için okuma ekranını açmak gerekebilir.
+
+Hotspot kaydedildikten sonra kameranın kendi ağı ısınmayı azaltmak için kapanır; aşağıdaki NotCamera ağı yalnızca ilk kurulumda açıktır. Sonrasında kamera sayfası USB bölümünde görünen hotspot adresinden açılır.
 
 USB bölümünde görünen NotCamera ağı ve koduyla telefondan `http://192.168.4.1` açılabilir. Kullanıcı adı `admin`, parola kameranın kendi kodudur. Bu kamera sayfasıdır; NotEkran'ın ağı farklıdır. İki cihazın kendi ağı da aynı yerel adresi kullanır: hangi Wi-Fi ağına bağlandıysan o cihaz açılır. Hotspot üzerinden aynı sayfa USB bölümünde gösterilen kamera IP adresinden açılabilir; iPhone hotspot erişimi ayrıca denenmelidir.
 
