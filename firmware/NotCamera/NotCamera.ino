@@ -16,7 +16,7 @@
 #include "cloud_roots.h"
 #include "setup_page.h"
 
-constexpr char CAMERA_VERSION[]="0.1.2";
+constexpr char CAMERA_VERSION[]="0.1.3";
 constexpr char API[]="https://jckoovsocynnxbrsalld.supabase.co/functions/v1/not-kamera-api";
 constexpr size_t MAX_JPEG=1024*1024,MAX_REPLY=160*1024;
 Preferences prefs;WebServer web(80);SemaphoreHandle_t mutex;
@@ -25,6 +25,10 @@ String networkIp;NoteCapture::Frame latestMetrics;bool cameraReady=false,hasPend
 uint8_t* latestImage=nullptr;size_t latestLength=0;unsigned sent=0,rendered=0,retries=0;
 uint32_t rebootAt=0;bool rebootRequested=false,clearRequested=false,testRequested=false,sensorActive=false,cameraFault=false;
 String cameraError;
+// Last station disconnect reason (wifi_err_reason_t), 0 after an address is obtained; shown on the USB page.
+volatile int wifiReason=0;volatile bool wifiScanning=false;
+// iPhone hotspot names use a typographic apostrophe ("Haydar iPhone’u"); keyboards type '. Swap one for the other.
+String apostropheVariant(const String& ssid){String v=ssid;if(v.indexOf("\xE2\x80\x99")>=0)v.replace("\xE2\x80\x99","'");else if(v.indexOf('\'')>=0)v.replace("'","\xE2\x80\x99");else return String();return v.length()<=32?v:String();}
 struct Settings {String ssid,password,token,course="Makroökonomie",rules;NoteCapture::Limits limits;bool automatic=false;};
 Settings settings;NoteCapture::Policy policy;
 
@@ -125,11 +129,11 @@ String snapshot(bool usb=false){
  cJSON_AddNumberToObject(j,"mean",latestMetrics.mean);cJSON_AddNumberToObject(j,"light",latestMetrics.light);cJSON_AddNumberToObject(j,"ink",latestMetrics.ink);cJSON_AddNumberToObject(j,"edge",latestMetrics.edge);
  cJSON_AddNumberToObject(j,"sent",sent);cJSON_AddNumberToObject(j,"rendered",rendered);cJSON_AddNumberToObject(j,"retries",retries);
  if(usb){cJSON_AddStringToObject(j,"ap",apName.c_str());cJSON_AddStringToObject(j,"code",deviceCode.c_str());}
- xSemaphoreGive(mutex);cJSON_AddBoolToObject(j,"wifi",WiFi.status()==WL_CONNECTED);String s=serialize(j);cJSON_Delete(j);return s;
+ xSemaphoreGive(mutex);cJSON_AddBoolToObject(j,"wifi",WiFi.status()==WL_CONNECTED);cJSON_AddNumberToObject(j,"wifi_reason",wifiReason);String s=serialize(j);cJSON_Delete(j);return s;
 }
 bool configure(cJSON* j,String& error){
  Settings old=config(),c; c.ssid=field(j,"ssid");c.password=field(j,"password");c.token=field(j,"token");c.course=field(j,"course");c.rules=field(j,"rules");
- if(c.password.isEmpty()&&c.ssid==old.ssid)c.password=old.password;
+ if(c.password.isEmpty()&&(c.ssid==old.ssid||c.ssid==apostropheVariant(old.ssid)))c.password=old.password;
  if(c.token.isEmpty())c.token=old.token;
  auto number=cJSON_GetObjectItemCaseSensitive(j,"interval");if(cJSON_IsNumber(number)){
   double seconds=number->valuedouble;
@@ -149,9 +153,20 @@ bool configure(cJSON* j,String& error){
  if(ok){settings=c;rebootRequested=true;rebootAt=millis()+1200;}
  xSemaphoreGive(mutex);if(!ok)error="Ayarlar belleğe yazılamadı.";return ok;
 }
+// Lets the USB page offer the exact hotspot names the camera can see (2.4 GHz only).
+String scanNetworks(){
+ wifiScanning=true;bool online=WiFi.status()==WL_CONNECTED;if(!online)WiFi.disconnect(false,false);
+ int n=WiFi.scanNetworks(false,false);cJSON* r=cJSON_CreateObject();cJSON* list=cJSON_AddArrayToObject(r,"networks");
+ for(int i=0;i<n&&cJSON_GetArraySize(list)<20;++i){String ssid=WiFi.SSID(i);if(ssid.isEmpty())continue;bool seen=false;
+  cJSON* item;cJSON_ArrayForEach(item,list)if(field(item,"ssid")==ssid)seen=true;if(seen)continue;
+  item=cJSON_CreateObject();cJSON_AddStringToObject(item,"ssid",ssid.c_str());cJSON_AddNumberToObject(item,"rssi",WiFi.RSSI(i));cJSON_AddItemToArray(list,item);}
+ cJSON_AddBoolToObject(r,"ok",n>=0);WiFi.scanDelete();Settings c=config();
+ if(!online&&c.ssid.length())WiFi.begin(c.ssid.c_str(),c.password.c_str());wifiScanning=false;String out=serialize(r);cJSON_Delete(r);return out;
+}
 void serialCommand(const String& line){
  cJSON* j=cJSON_Parse(line.c_str());if(!j)return;String command=field(j,"cmd");
  if(command=="status")Serial.println(snapshot(true));
+ else if(command=="scan")Serial.println(scanNetworks());
  else if(command=="test_camera")Serial.println(requestTest()?"{\"ok\":true}":"{\"ok\":false,\"detail\":\"Kamera meşgul.\"}");
  else if(command=="configure"){String error;bool ok=configure(j,error);cJSON* r=cJSON_CreateObject();cJSON_AddBoolToObject(r,"ok",ok);cJSON_AddStringToObject(r,"detail",ok?"Ayarlar kaydedildi; kamera yeniden başlıyor.":error.c_str());Serial.println(serialize(r));cJSON_Delete(r);}
  cJSON_Delete(j);
@@ -167,7 +182,7 @@ struct Pending {
  ~Pending(){externalFree(image);}
 };
 void worker(void*){
- Pending* pending=nullptr;uint32_t nextPreview=0,nextCloud=0,lastReconnect=0;bool wasOnline=false;
+ Pending* pending=nullptr;uint32_t nextPreview=0,nextCloud=0,lastReconnect=0;bool wasOnline=false,useAlt=false;
  status("setup","İlk kurulum için USB sayfasından ayarları kaydet.");
  for(;;){
   vTaskDelay(pdMS_TO_TICKS(40));uint32_t now=millis();Settings c=config();
@@ -175,7 +190,13 @@ void worker(void*){
   if(restarting)continue;
   if(clear&&!pending){policy.recent.clear();policy.resetMotion();saveRecent();}
   bool online=WiFi.status()==WL_CONNECTED;
-  if(!online&&c.ssid.length()&&uint32_t(now-lastReconnect)>20000){WiFi.reconnect();lastReconnect=now;}
+  if(!online&&!wifiScanning&&c.ssid.length()&&uint32_t(now-lastReconnect)>20000){
+   String alt=apostropheVariant(c.ssid);int reason=wifiReason;
+   if(alt.length()&&(reason==WIFI_REASON_NO_AP_FOUND||reason==WIFI_REASON_NO_AP_FOUND_W_COMPATIBLE_SECURITY||useAlt)){useAlt=!useAlt;WiFi.disconnect(false,false);WiFi.begin((useAlt?alt:c.ssid).c_str(),c.password.c_str());}
+   else WiFi.reconnect();lastReconnect=now;}
+  if(online&&!wasOnline&&useAlt){
+   // The other apostrophe matched: keep that exact name so the next boot connects at once.
+   String alt=apostropheVariant(c.ssid);xSemaphoreTake(mutex,portMAX_DELAY);if(alt.length()&&settings.ssid==c.ssid){settings.ssid=alt;prefs.putString("ssid",alt);}xSemaphoreGive(mutex);useAlt=false;}
   if(online&&!wasOnline){configTime(0,0,"pool.ntp.org","time.google.com");}
   wasOnline=online;xSemaphoreTake(mutex,portMAX_DELAY);networkIp=online?WiFi.localIP().toString():String();xSemaphoreGive(mutex);
   if(pending){
@@ -264,6 +285,7 @@ void setup(){
  deviceCode=prefs.getString("code","");if(deviceCode.length()!=16){deviceCode=uuid();deviceCode.replace("-","");deviceCode=deviceCode.substring(0,16);prefs.putString("code",deviceCode);}
  csrf=uuid();uint64_t mac=ESP.getEfuseMac();char suffix[5];snprintf(suffix,5,"%04X",unsigned(mac&65535));apName="NotCamera-"+String(suffix);
  if(prefs.getBytesLength("recent")==sizeof(policy.recent)){prefs.getBytes("recent",&policy.recent,sizeof(policy.recent));if(policy.recent.count>8||policy.recent.next>7)policy.recent.clear();}
+ WiFi.onEvent([](arduino_event_id_t event,arduino_event_info_t info){if(event==ARDUINO_EVENT_WIFI_STA_DISCONNECTED)wifiReason=info.wifi_sta_disconnected.reason;else if(event==ARDUINO_EVENT_WIFI_STA_GOT_IP)wifiReason=0;});
  WiFi.mode(WIFI_AP_STA);WiFi.setAutoReconnect(true);WiFi.softAP(apName.c_str(),deviceCode.c_str());if(settings.ssid.length())WiFi.begin(settings.ssid.c_str(),settings.password.c_str());
  const char* headers[]={"X-CSRF"};web.collectHeaders(headers,1);
  web.on("/",HTTP_GET,[]{if(!authorized())return;String html=FPSTR(SETUP_PAGE);html.replace("__CSRF__",csrf);web.sendHeader("Cache-Control","no-store");web.sendHeader("X-Frame-Options","DENY");web.send(200,"text/html; charset=utf-8",html);});
