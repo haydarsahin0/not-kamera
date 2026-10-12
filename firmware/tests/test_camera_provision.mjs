@@ -1,17 +1,17 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs/promises';import vm from 'node:vm';
 const source=await fs.readFile(new URL('../../web/camera-install/provision.js',import.meta.url),'utf8');
-function fixture(device='NotCamera',dropFirst=false){
+function fixture(device='NotCamera',dropFirst=false,extra={}){
  const nodes=new Map(),commands=[],chunks=[];let callback,queued=[],reset=false,signals;
  const get=id=>{if(!nodes.has(id))nodes.set(id,{value:'',textContent:'',disabled:false,checked:true,addEventListener(name,fn){this[name]=fn;}});return nodes.get(id);};
  const reader={async read(){if(queued.length)return {value:queued.shift(),done:false};return new Promise(r=>callback=r);},async cancel(){callback?.({done:true});},releaseLock(){}};
  const respond=j=>{const value=new TextEncoder().encode('boot noise\n'+JSON.stringify(j)+'\n');if(callback){const r=callback;callback=null;r({value,done:false});}else queued.push(value);};
- let line='';const utf8=new TextDecoder();const writer={async write(bytes){chunks.push(bytes.length);line+=utf8.decode(bytes,{stream:true});if(!line.endsWith('\n'))return;const j=JSON.parse(line);line='';commands.push(j);if(dropFirst&&commands.length===1)return;if(j.cmd==='status')respond({device,version:'0.1.2',detail:'ready',camera_ready:true,wifi:true,ip:'172.20.10.2',ap:'NotCamera-1234',code:'private-device-code',ssid:'Test iPhone',course:'Makroökonomie',rules:'',interval:15,automatic:true,sent:0,rendered:0,busy:false});else if(j.cmd==='test_camera')respond({ok:true});else if(j.cmd==='configure'){reset=true;respond({ok:true});}},releaseLock(){}};
+ let line='';const utf8=new TextDecoder();const writer={async write(bytes){chunks.push(bytes.length);line+=utf8.decode(bytes,{stream:true});if(!line.endsWith('\n'))return;const j=JSON.parse(line);line='';commands.push(j);if(dropFirst&&commands.length===1)return;if(j.cmd==='status')respond({device,version:'0.1.3',detail:'ready',camera_ready:true,wifi:true,ip:'172.20.10.2',ap:'NotCamera-1234',code:'private-device-code',ssid:'Test iPhone',course:'Makroökonomie',rules:'',interval:15,automatic:true,sent:0,rendered:0,busy:false,...extra});else if(j.cmd==='scan')respond({ok:true,networks:[{ssid:'Haydar iPhone’u',rssi:-40},{ssid:'Komşu',rssi:-80}]});else if(j.cmd==='test_camera')respond({ok:true});else if(j.cmd==='configure'){reset=true;respond({ok:true});}},releaseLock(){}};
  const port={async setSignals(s){signals=s;},async open(opts){assert.equal(opts.baudRate,115200);},readable:{getReader:()=>reader},writable:{getWriter:()=>writer},async close(){}};
  const timers=new Map();let n=0;const ctx={document:{getElementById:get},navigator:{serial:{requestPort:async()=>port}},TextDecoder,TextEncoder,JSON,Number,Error,console,setTimeout(fn,ms){if(ms===600||ms===200||ms===6000||ms===20){queueMicrotask(fn);return ++n;}timers.set(++n,fn);if(dropFirst&&commands.length===0)queueMicrotask(fn);return n;},clearTimeout(id){timers.delete(id);}};
  vm.runInNewContext(source,ctx);return {get,commands,chunks,reset:()=>reset,signals:()=>signals};
 }
 test('camera identity checked before USB provisioning; credentials never leave USB',async()=>{
- const s=fixture();await s.get('usbConnect').onclick();assert.equal(s.get('save').disabled,false);assert.match(s.get('usbState').textContent,/NotCamera 0.1.2/);
+ const s=fixture();await s.get('usbConnect').onclick();assert.equal(s.get('save').disabled,false);assert.match(s.get('usbState').textContent,/NotCamera 0.1.3/);
  s.get('password').value='private-hotspot';s.get('token').value='z'.repeat(48);s.get('rules').value='x'.repeat(900)+'Antworten mit ä und ö';
  await s.get('setup').submit({preventDefault(){}});assert.equal(s.commands.length,2);assert.equal(s.commands[1].password,'private-hotspot');assert.equal(s.commands[1].token,'z'.repeat(48));assert.equal(s.commands[1].rules,'x'.repeat(900)+'Antworten mit ä und ö');assert(s.chunks.length>15&&s.chunks.every(n=>n<=64));assert.equal(s.get('password').value,'');assert.equal(s.get('token').value,'');assert(s.reset());
  // Only local USB code is shown, never the cloud bearer or hotspot password.
@@ -58,4 +58,11 @@ test('only camera USB ports are offered, and a busy or missing port gets a speci
  let s=silent();await s.get('usbConnect').onclick();assert(s.filters().some(f=>f.usbVendorId===0x303a));
  s=silent({openError:Object.assign(Error('Failed to open serial port.'),{name:'NetworkError'})});await s.get('usbConnect').onclick();assert.match(s.get('usbState').textContent,/başka bir pencere/);assert.equal(s.get('usbConnect').disabled,false);
  s=silent({requestError:Object.assign(Error('No port selected by the user.'),{name:'NotFoundError'})});await s.get('usbConnect').onclick();assert.match(s.get('usbState').textContent,/USB JTAG\/serial debug unit/);
+});
+test('offline camera lists visible hotspots and saves the iPhone apostrophe spelling',async()=>{
+ const s=fixture('NotCamera',false,{wifi:false,wifi_reason:201,ssid:"Haydar iPhone'u",automatic:false,camera_ready:true});await s.get('usbConnect').onclick();
+ const text=s.get('usbState').textContent;assert.match(text,/bulunamadı/);assert.match(text,/Haydar iPhone’u · Komşu/);
+ assert.equal(s.get('ssid').value,'Haydar iPhone’u');assert.equal(s.get('automatic').checked,true);
+ s.get('ssid').value="Haydar iPhone'u ";s.get('password').value='private-hotspot';s.get('token').value='z'.repeat(48);
+ await s.get('setup').submit({preventDefault(){}});const saved=s.commands.find(c=>c.cmd==='configure');assert.equal(saved.ssid,'Haydar iPhone’u');assert.equal(saved.automatic,true);
 });

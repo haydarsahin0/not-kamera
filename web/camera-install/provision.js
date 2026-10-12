@@ -24,10 +24,22 @@ function openError(e){const text=String(e&&e.message||'');
  if(e&&e.name==='NotFoundError')return 'Kamera seçilmedi. Listede “USB JTAG/serial debug unit” görünmüyorsa: veri aktarabilen başka bir USB-C kablo ve başka bir USB portu dene, kamerayı çıkarıp yeniden tak. Hâlâ yoksa BOOT’u basılı tutup RESET’e kısa bas, BOOT’u bırak ve 1. adımdan yazılımı yeniden yükle.';
  if(e&&(e.name==='InvalidStateError'||e.name==='NetworkError')||/open/i.test(text))return 'Kamera bağlantı noktası başka bir pencere tarafından kullanılıyor. Yükleyici penceresini (Logs/Console) ve Arduino seri monitörünü kapat, bu sayfanın başka sekmelerini kapat. Sonra kabloyu çıkarıp yeniden tak, sayfayı yenile ve tekrar dene.';
  return text||'USB bağlantısı açılamadı.';}
-function show(s){verified=s.device==='NotCamera'&&s.version==='0.1.2';el('save').disabled=!verified||s.busy;
- if(!verified){message(s.device==='NotCamera'?'Kamerada eski NotCamera '+s.version+' var. Ayar gönderilmedi. Önce 1. adımdan 0.1.2 yazılımını yükle.':'Seçilen cihaz NotCamera 0.1.2 değil. Ayar gönderilmedi. Kamera kartını ve yüklemeyi kontrol et.');return;}
- for(const key of ['ssid','course','rules','interval'])if(s[key]!==undefined)el(key).value=s[key];el('automatic').checked=!!s.automatic;
- message('NotCamera '+s.version+'\n'+s.detail+'\nKamera testi: '+(s.camera_ready?'başarılı':(s.camera_error||'henüz yapılmadı'))+'\nSensör: '+(s.sensor_active?'çekim yapıyor':'beklemede')+'\nWi-Fi: '+(s.wifi?'bağlı':'bekleniyor')+(s.ip?'\nHotspot adresi: http://'+s.ip:'')+'\nKamera ağı: '+s.ap+'\nKamera ağ şifresi: '+s.code+'\nGönderilen: '+s.sent+' · Ekranda gösterilen: '+s.rendered);
+// wifi_reason is ESP-IDF wifi_err_reason_t from the last station disconnect.
+function wifiText(s){const r=Number(s.wifi_reason)||0;if(!s.ssid)return 'hotspot adı kaydedilmedi';
+ if([201,210,211,212].includes(r))return '“'+s.ssid+'” bulunamadı. iPhone’da Kişisel Erişim Noktası ekranını açık tut ve “Uyumluluğu En Üst Düzeye Çıkar”ı aç. Ad tam aynı olmalı (aşağıdaki listeden seç).';
+ if([2,15,202,204].includes(r))return 'hotspot şifresi yanlış görünüyor. Şifreyi yeniden yazıp kaydet.';
+ return r?'bağlanamadı (kod '+r+'); hotspotu açık tut, kamera tekrar deniyor':'bağlanıyor…';}
+let seen=[];const plain=t=>String(t).replace(/[’‘`´]/g,"'").trim();
+// Apostrophe style differs between keyboards and iPhone names: use the camera's exact spelling when it sees the network.
+function exactSsid(name){return seen.find(n=>n===name)||seen.find(n=>plain(n)===plain(name))||name.trim();}
+async function scan(){try{const r=await command({cmd:'scan'},j=>Array.isArray(j.networks),15000);seen=r.networks.map(n=>n.ssid);
+ const list=el('ssidList');if(list&&document.createElement)list.replaceChildren(...seen.map(n=>{const o=document.createElement('option');o.value=n;return o;}));
+ if(el('ssid').value)el('ssid').value=exactSsid(el('ssid').value);return seen;}catch{return null;}}
+function show(s){verified=s.device==='NotCamera'&&s.version==='0.1.3';el('save').disabled=!verified||s.busy;
+ if(!verified){message(s.device==='NotCamera'?'Kamerada eski NotCamera '+s.version+' var. Ayar gönderilmedi. Önce 1. adımdan 0.1.3 yazılımını yükle.':'Seçilen cihaz NotCamera 0.1.3 değil. Ayar gönderilmedi. Kamera kartını ve yüklemeyi kontrol et.');return;}
+ for(const key of ['ssid','course','rules','interval'])if(s[key]!==undefined)el(key).value=s[key];// The user wants unattended capture: once the single-frame test passed, offer it pre-ticked.
+ el('automatic').checked=!!s.automatic||!!s.camera_ready;
+ message('NotCamera '+s.version+'\n'+s.detail+'\nKamera testi: '+(s.camera_ready?'başarılı':(s.camera_error||'henüz yapılmadı'))+'\nSensör: '+(s.sensor_active?'çekim yapıyor':'beklemede')+'\nWi-Fi: '+(s.wifi?'bağlı':wifiText(s))+(s.ip?'\nHotspot adresi: http://'+s.ip:'')+'\nKamera ağı: '+s.ap+'\nKamera ağ şifresi: '+s.code+'\nGönderilen: '+s.sent+' · Ekranda gösterilen: '+s.rendered);
 }
 el('usbConnect').onclick=async()=>{el('usbConnect').disabled=true;try{if(!navigator.serial)throw Error('USB kurulumu için Windows Chrome/Edge kullan.');
  if(!connected){await close();received=0;noise='';try{port=await navigator.serial.requestPort({filters:FILTERS});await port.open({baudRate:115200});}catch(e){port=null;throw Error(openError(e));}message('Kamera bağlantı noktası açıldı; cevap bekleniyor…');if(port.setSignals)await port.setSignals({dataTerminalReady:true,requestToSend:false});reader=port.readable.getReader();writer=port.writable.getWriter();connected=true;readLoop();await new Promise(r=>setTimeout(r,600));}
@@ -39,8 +51,10 @@ el('usbConnect').onclick=async()=>{el('usbConnect').disabled=true;try{if(!naviga
   if(!connected)throw Error('Kamera yeniden başlatıldı. Şimdi “USB’den kamerayı bul” düğmesine tekrar bas ve listeden kamerayı yeniden seç.');
   for(let attempt=0;;++attempt){try{s=await status(5000);break;}catch(e2){if(attempt===1||!connected)throw e2;message('Kameranın başlaması bekleniyor; bağlantı tekrar kontrol ediliyor…');}}}
  show(s);
+ if(verified&&!s.wifi){const names=await scan();if(names)message(el('usbState').textContent+'\n\nKameranın gördüğü ağlar: '+(names.length?names.join(' · '):'hiç ağ yok (hotspot kapalı veya yalnızca 5 GHz)'));}
  }catch(e){message(e.message||'USB bağlantısı açılamadı.');await close();}finally{el('usbConnect').disabled=false;}};
 el('setup').addEventListener('submit',async event=>{event.preventDefault();if(!verified||!connected){message('Önce USB’den kamerayı bul.');return;}el('save').disabled=true;
+ el('ssid').value=exactSsid(el('ssid').value);
  const data={cmd:'configure',automatic:el('automatic').checked,interval:Number(el('interval').value),edge_min:2,duplicate_max:8};for(const k of ['ssid','password','token','course','rules'])data[k]=el(k).value;
  try{const r=await command(data,j=>typeof j.ok==='boolean');if(!r.ok)throw Error(r.detail||'Ayarlar kaydedilemedi.');el('password').value=el('token').value='';message('Ayarlar kameraya kaydedildi. Kamera yeniden başlayacak. Hotspotu ve NotEkran’ı açık tut. Durumu yeniden okumak için USB’den kamerayı bul düğmesine bas.');verified=false;}
  catch(e){message(e.message);el('save').disabled=!verified;}
