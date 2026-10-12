@@ -30,3 +30,20 @@ test('a lost initial status request is retried without sending credentials',asyn
 test('single-frame diagnostic needs a verified camera and sends no secrets',async()=>{
  const s=fixture();await s.get('testCamera').onclick();assert.equal(s.commands.length,0);await s.get('usbConnect').onclick();await s.get('testCamera').onclick();assert.equal(JSON.stringify(s.commands[1]),'{"cmd":"test_camera"}');
 });
+function silent({openError,requestError,hangClose=false}={}){
+ // A port that accepts the connection but never answers and never finishes writing/closing.
+ const nodes=new Map();let filters;const get=id=>{if(!nodes.has(id))nodes.set(id,{value:'',textContent:'',disabled:false,checked:true,addEventListener(name,fn){this[name]=fn;}});return nodes.get(id);};
+ const never=()=>new Promise(()=>{});
+ const reader={read:never,cancel:never,releaseLock(){}},writer={write:never,abort:never,releaseLock(){}};
+ const port={async setSignals(){},async open(){if(openError)throw openError;},readable:{getReader:()=>reader},writable:{getWriter:()=>writer},close:hangClose?never:async()=>{}};
+ const ctx={document:{getElementById:get},navigator:{serial:{requestPort:async o=>{filters=o&&o.filters;if(requestError)throw requestError;return port;}}},TextDecoder,TextEncoder,JSON,Number,Error,String,Promise,console,setTimeout(fn){queueMicrotask(fn);return 1;},clearTimeout(){}};
+ vm.runInNewContext(source,ctx);return {get,filters:()=>filters};
+}
+test('a silent port reports no data and never leaves the find button disabled',async()=>{
+ const s=silent({hangClose:true});await s.get('usbConnect').onclick();assert.equal(s.get('usbConnect').disabled,false);assert.match(s.get('usbState').textContent,/hiç veri gelmedi/);assert.equal(s.get('save').disabled,true);
+});
+test('only camera USB ports are offered, and a busy or missing port gets a specific hint',async()=>{
+ let s=silent();await s.get('usbConnect').onclick();assert(s.filters().some(f=>f.usbVendorId===0x303a));
+ s=silent({openError:Object.assign(Error('Failed to open serial port.'),{name:'NetworkError'})});await s.get('usbConnect').onclick();assert.match(s.get('usbState').textContent,/başka bir pencere/);assert.equal(s.get('usbConnect').disabled,false);
+ s=silent({requestError:Object.assign(Error('No port selected by the user.'),{name:'NotFoundError'})});await s.get('usbConnect').onclick();assert.match(s.get('usbState').textContent,/USB JTAG\/serial debug unit/);
+});
