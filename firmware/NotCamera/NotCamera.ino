@@ -16,15 +16,16 @@
 #include "cloud_roots.h"
 #include "setup_page.h"
 
-constexpr char CAMERA_VERSION[]="0.1.0";
+constexpr char CAMERA_VERSION[]="0.1.1";
 constexpr char API[]="https://jckoovsocynnxbrsalld.supabase.co/functions/v1/not-kamera-api";
 constexpr size_t MAX_JPEG=1024*1024,MAX_REPLY=160*1024;
 Preferences prefs;WebServer web(80);SemaphoreHandle_t mutex;
 String apName,deviceCode,csrf,phase="starting",detail="Kamera hazırlanıyor",currentJob,deliveryId;
 String networkIp;NoteCapture::Frame latestMetrics;bool cameraReady=false,hasPending=false,enabled=true;
 uint8_t* latestImage=nullptr;size_t latestLength=0;unsigned sent=0,rendered=0,retries=0;
-uint32_t rebootAt=0;bool rebootRequested=false,clearRequested=false;
-struct Settings {String ssid,password,token,course="Makroökonomie",rules;NoteCapture::Limits limits;bool automatic=true;};
+uint32_t rebootAt=0;bool rebootRequested=false,clearRequested=false,testRequested=false,sensorActive=false,cameraFault=false;
+String cameraError;
+struct Settings {String ssid,password,token,course="Makroökonomie",rules;NoteCapture::Limits limits;bool automatic=false;};
 Settings settings;NoteCapture::Policy policy;
 
 void* externalAlloc(size_t n){void* p=heap_caps_malloc(n,MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT);return p?p:heap_caps_malloc(n,MALLOC_CAP_8BIT);}
@@ -58,11 +59,26 @@ bool initCamera(){
  c.pin_vsync=38;c.pin_href=47;c.pin_pclk=13;c.xclk_freq_hz=20000000;
  c.pixel_format=PIXFORMAT_JPEG;c.frame_size=FRAMESIZE_UXGA;c.jpeg_quality=10;c.fb_count=1;
  c.fb_location=CAMERA_FB_IN_PSRAM;c.grab_mode=CAMERA_GRAB_WHEN_EMPTY;
- if(!psramFound()||esp_camera_init(&c)!=ESP_OK)return false;
- auto sensor=esp_camera_sensor_get();if(!sensor)return false;
+ if(!psramFound()){status("camera_error","PSRAM bulunamadı. Kart/derleme ayarlarını kontrol et.");return false;}
+ esp_err_t result=esp_camera_init(&c);
+ if(result!=ESP_OK){status("camera_error",String("Kamera başlatılamadı: ")+esp_err_to_name(result)+". Gücü çıkarıp Sense modülünü kontrol et.");return false;}
+ auto sensor=esp_camera_sensor_get();if(!sensor){esp_camera_deinit();status("camera_error","Sensör bulunamadı.");return false;}
  sensor->set_framesize(sensor,FRAMESIZE_UXGA);sensor->set_quality(sensor,10);
  return true;
 }
+
+// Worker exclusively owns the sensor. Stop camera clock/DMA between capture windows.
+// This reduces active work; it is not a temperature sensor or a hardware power cutoff.
+struct CameraWindow {
+ bool ok;
+ CameraWindow():ok(initCamera()){
+  xSemaphoreTake(mutex,portMAX_DELAY);cameraReady=ok;sensorActive=ok;
+  if(!ok){cameraFault=true;cameraError=detail;}xSemaphoreGive(mutex);
+ }
+ ~CameraWindow(){if(ok)esp_camera_deinit();xSemaphoreTake(mutex,portMAX_DELAY);sensorActive=false;xSemaphoreGive(mutex);}
+};
+bool requestTest(){xSemaphoreTake(mutex,portMAX_DELAY);bool ok=!hasPending&&!sensorActive&&!testRequested;
+ if(ok){testRequested=true;cameraFault=false;}xSemaphoreGive(mutex);return ok;}
 
 // Bound even a chunked API response; no model answer is sent to Serial or UI.
 class ReplyStream:public Stream {
@@ -100,6 +116,7 @@ String snapshot(bool usb=false){
  cJSON* j=cJSON_CreateObject();xSemaphoreTake(mutex,portMAX_DELAY);
  cJSON_AddStringToObject(j,"device","NotCamera");cJSON_AddStringToObject(j,"version",CAMERA_VERSION);
  cJSON_AddStringToObject(j,"phase",phase.c_str());cJSON_AddStringToObject(j,"detail",detail.c_str());
+ cJSON_AddBoolToObject(j,"sensor_active",sensorActive);cJSON_AddStringToObject(j,"camera_error",cameraError.c_str());
  cJSON_AddBoolToObject(j,"camera_ready",cameraReady);cJSON_AddBoolToObject(j,"configured",!settings.ssid.isEmpty()&&validToken(settings.token));
  cJSON_AddBoolToObject(j,"automatic",settings.automatic);cJSON_AddBoolToObject(j,"busy",hasPending);
  cJSON_AddStringToObject(j,"ssid",settings.ssid.c_str());cJSON_AddStringToObject(j,"ip",networkIp.c_str());
@@ -121,7 +138,7 @@ bool configure(cJSON* j,String& error){
  }
  number=cJSON_GetObjectItemCaseSensitive(j,"edge_min");if(cJSON_IsNumber(number))c.limits.edgeMin=number->valuedouble;
  number=cJSON_GetObjectItemCaseSensitive(j,"duplicate_max");if(cJSON_IsNumber(number))c.limits.duplicateMax=number->valuedouble;
- auto automatic=cJSON_GetObjectItemCaseSensitive(j,"automatic");c.automatic=!cJSON_IsFalse(automatic);
+ auto automatic=cJSON_GetObjectItemCaseSensitive(j,"automatic");c.automatic=cJSON_IsTrue(automatic);
  if(c.ssid.isEmpty()||c.ssid.length()>32||c.password.length()<8||c.password.length()>63||!validToken(c.token)||c.course.length()>120||c.rules.length()>1000||c.limits.interval<5000||c.limits.interval>120000||c.limits.edgeMin<.5||c.limits.edgeMin>30||c.limits.duplicateMax<1||c.limits.duplicateMax>25){error="Ağ, erişim kodu veya ayar biçimi geçersiz.";return false;}
  xSemaphoreTake(mutex,portMAX_DELAY);
  if(hasPending){xSemaphoreGive(mutex);error="Önce devam eden fotoğrafın tamamlanmasını bekle.";return false;}
@@ -135,6 +152,7 @@ bool configure(cJSON* j,String& error){
 void serialCommand(const String& line){
  cJSON* j=cJSON_Parse(line.c_str());if(!j)return;String command=field(j,"cmd");
  if(command=="status")Serial.println(snapshot(true));
+ else if(command=="test_camera")Serial.println(requestTest()?"{\"ok\":true}":"{\"ok\":false,\"detail\":\"Kamera meşgul.\"}");
  else if(command=="configure"){String error;bool ok=configure(j,error);cJSON* r=cJSON_CreateObject();cJSON_AddBoolToObject(r,"ok",ok);cJSON_AddStringToObject(r,"detail",ok?"Ayarlar kaydedildi; kamera yeniden başlıyor.":error.c_str());Serial.println(serialize(r));cJSON_Delete(r);}
  cJSON_Delete(j);
 }
@@ -149,8 +167,6 @@ struct Pending {
  ~Pending(){externalFree(image);}
 };
 void worker(void*){
- bool ready=initCamera();xSemaphoreTake(mutex,portMAX_DELAY);cameraReady=ready;xSemaphoreGive(mutex);
- if(!ready){status("camera_error","Kamera açılamadı: Sense kamera modülünü ve PSRAM'i kontrol et.");vTaskDelete(nullptr);return;}
  Pending* pending=nullptr;uint32_t nextPreview=0,nextCloud=0,lastReconnect=0;bool wasOnline=false;
  status("setup","İlk kurulum için USB sayfasından ayarları kaydet.");
  for(;;){
@@ -197,9 +213,22 @@ void worker(void*){
    }
    xSemaphoreTake(mutex,portMAX_DELAY);hasPending=pending!=nullptr;xSemaphoreGive(mutex);continue;
   }
-  if(int32_t(now-nextPreview)<0)continue;nextPreview=now+1000;
-  camera_fb_t* fb=esp_camera_fb_get();if(!fb){status("camera_error","Görüntü alınamadı; kamera yeniden deniyor.");policy.resetMotion();continue;}
+  xSemaphoreTake(mutex,portMAX_DELAY);bool test=testRequested;testRequested=false;bool fault=cameraFault;xSemaphoreGive(mutex);
+  if(!test){
+   if(fault)continue;
+   if(c.ssid.isEmpty()||!validToken(c.token)){status("setup","Kurulum bekleniyor; görüntü alma durduruldu. USB'den bağlantıyı ve tek kareyi test edebilirsin.");continue;}
+   if(!c.automatic){status("paused","Otomatik çekim kapalı; sensör beklemede. Önce tek kare testi yap.");continue;}
+   if(!online){status("waiting_wifi","Hotspot bekleniyor; görüntü alma durduruldu.");continue;}
+   if(time(nullptr)<1767225600){status("waiting_clock","Saat eşitleniyor; görüntü alma durduruldu.");continue;}
+   if(int32_t(now-nextPreview)<0)continue;
+  }
+  nextPreview=now+8000;
+  CameraWindow window;if(!window.ok)continue;
+  // Give auto exposure a few frames after restarting the sensor.
+  for(int warm=0;warm<3;++warm){auto frame=esp_camera_fb_get();if(frame)esp_camera_fb_return(frame);vTaskDelay(pdMS_TO_TICKS(80));}
+  camera_fb_t* fb=esp_camera_fb_get();if(!fb){status("camera_error","Görüntü alınamadı; otomatik deneme durduruldu. Tek kare testiyle yeniden dene.");xSemaphoreTake(mutex,portMAX_DELAY);cameraFault=true;cameraError=detail;xSemaphoreGive(mutex);policy.resetMotion();continue;}
   auto f=measure(fb);cacheImage(fb,f);esp_camera_fb_return(fb);
+  if(test){status("test_ok","Tek kare alındı; sensör durduruldu. Görüntü yalnızca yerel önizlemede, yapay zekaya gönderilmedi.");nextPreview=millis()+8000;continue;}
   if(c.ssid.isEmpty()||!validToken(c.token)){status("setup","İlk kurulum gerekli.");policy.resetMotion();continue;}
   if(!c.automatic){status("paused","Otomatik çekim duraklatıldı.");policy.resetMotion();continue;}
   if(!online){status("waiting_wifi","Kayıtlı erişim noktası bekleniyor.");policy.resetMotion();continue;}
@@ -223,12 +252,14 @@ void worker(void*){
 }
 
 void setup(){
- Serial.begin(115200);mutex=xSemaphoreCreateMutex();
+ Serial.begin(115200);setCpuFrequencyMhz(160);mutex=xSemaphoreCreateMutex();
  cJSON_Hooks hooks={externalAlloc,externalFree};cJSON_InitHooks(&hooks);
  prefs.begin("not-camera",false);
  settings.ssid=prefs.getString("ssid","");settings.password=prefs.getString("password","");settings.token=prefs.getString("token","");
  settings.course=prefs.getString("course","Makroökonomie");settings.rules=prefs.getString("rules","");settings.limits.interval=prefs.getUInt("interval",15000);
- settings.limits.edgeMin=prefs.getFloat("edge",2);settings.limits.duplicateMax=prefs.getFloat("duplicate",8);settings.automatic=prefs.getBool("automatic",true);
+ settings.limits.edgeMin=prefs.getFloat("edge",2);settings.limits.duplicateMax=prefs.getFloat("duplicate",8);settings.automatic=prefs.getBool("automatic",false);
+ // First boot after this safety update must not resume the old always-on setting.
+ if(prefs.getString("safe-version","")!=CAMERA_VERSION){settings.automatic=false;prefs.putBool("automatic",false);prefs.putString("safe-version",CAMERA_VERSION);}
  deviceCode=prefs.getString("code","");if(deviceCode.length()!=16){deviceCode=uuid();deviceCode.replace("-","");deviceCode=deviceCode.substring(0,16);prefs.putString("code",deviceCode);}
  csrf=uuid();uint64_t mac=ESP.getEfuseMac();char suffix[5];snprintf(suffix,5,"%04X",unsigned(mac&65535));apName="NotCamera-"+String(suffix);
  if(prefs.getBytesLength("recent")==sizeof(policy.recent)){prefs.getBytes("recent",&policy.recent,sizeof(policy.recent));if(policy.recent.count>8||policy.recent.next>7)policy.recent.clear();}
@@ -241,11 +272,12 @@ void setup(){
  web.on("/api/preview",HTTP_GET,[]{if(!authorized())return;xSemaphoreTake(mutex,portMAX_DELAY);size_t n=latestLength;auto p=(uint8_t*)externalAlloc(n);if(p&&n)memcpy(p,latestImage,n);xSemaphoreGive(mutex);
   if(!p||!n){externalFree(p);web.send(503,"text/plain","Görüntü henüz yok.");return;}web.sendHeader("Cache-Control","no-store");web.setContentLength(n);web.send(200,"image/jpeg","");web.client().write(p,n);externalFree(p);
  });
- web.onNotFound([]{web.send(404);});web.begin();xTaskCreatePinnedToCore(worker,"camera",24576,nullptr,1,nullptr,1);
+ web.onNotFound([]{web.send(404);});web.begin();
+ if(xTaskCreatePinnedToCore(worker,"camera",24576,nullptr,1,nullptr,1)!=pdPASS)status("worker_error","Kamera görevi başlatılamadı; bellek yetersiz.");
 }
 void loop(){
  web.handleClient();static String input;static bool discard=false;
- while(Serial.available()){char c=Serial.read();if(c=='\n'){if(!discard&&input.length())serialCommand(input);input="";discard=false;}else if(c!='\r'){if(input.length()<6000&&!discard)input+=c;else {input="";discard=true;}}}
+ while(Serial.available()>0){char c=Serial.read();if(c=='\n'){if(!discard&&input.length())serialCommand(input);input="";discard=false;}else if(c!='\r'){if(input.length()<6000&&!discard)input+=c;else {input="";discard=true;}}}
  xSemaphoreTake(mutex,portMAX_DELAY);bool reboot=rebootRequested&&int32_t(millis()-rebootAt)>=0;xSemaphoreGive(mutex);
  if(reboot){Serial.flush();ESP.restart();}delay(2);
 }

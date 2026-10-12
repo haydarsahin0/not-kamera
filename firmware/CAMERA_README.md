@@ -1,10 +1,19 @@
-# NotCamera 0.1.0 — ilk deneme sürümü
+## 0.1.1 — USB diagnosis and reduced capture duty
+
+- First boot after upgrade switches automatic capture off, including previously configured devices. Wi-Fi configuration stays saved.
+- Camera initialization is deferred until a local USB single-frame test or enabled/configured/online automatic capture. Setup, offline, paused, and cloud-wait states do not keep a capture window open.
+- Each capture window stops camera DMA/clock with `esp_camera_deinit()` on exit. The board has no controllable camera PWDN pin: this is not complete electrical isolation and is not an overtemperature shutdown.
+- Background observations are eight seconds apart; CPU runs at 160 MHz. Automatic capture is opt-in after checking hardware and a single frame. Initialization failures latch instead of retrying forever.
+- USB opens with DTR asserted/RTS released and retries one timed-out status query. Test button requests one local frame, without uploading it.
+- Real board temperature, USB recovery, sensor restart/image quality still require physical tests. If the device overheats while capture is paused, disconnect it and check hardware; software cannot certify it safe.
+
+# NotCamera 0.1.1 — ilk deneme sürümü
 
 Seeed Studio XIAO ESP32-S3 **Sense**, 8 MB Flash ve 8 MB PSRAM için hazırlanmıştır. OV2640 veya OV3660 ile 1600×1200 JPEG kullanır. Düz XIAO, ESP32-C3 ve Waveshare NotEkran için değildir. Kamera modülü ve üreticinin Wi-Fi anteni takılı olmalıdır.
 
 ## Yükleme
 
-Windows Chrome/Edge'de `https://haydarsahin0.github.io/not-kamera/camera-install/?v=0.1.0` adresini aç. Kamera kartını veri aktarabilen USB-C kabloyla bağla. İlk bölümde kamera yazılımını yükle. NotEkran'a bu dosyayı yükleme.
+Windows Chrome/Edge'de `https://haydarsahin0.github.io/not-kamera/camera-install/?v=0.1.1` adresini aç. Kamera kartını veri aktarabilen USB-C kabloyla bağla. İlk bölümde kamera yazılımını yükle. NotEkran'a bu dosyayı yükleme.
 
 Yükleyicinin seri konsolunu kapat. Gerekirse kameranın RESET tuşuna bir kez bas. İkinci bölümde USB bağlantısını seçip kamera bilgilerini oku. Hotspot adını/şifresini ve NotEkran'da zaten kullandığın **uygulama erişim kodunu** bir kez kaydet. OpenAI API anahtarını buraya girme. Kurulum bilgileri herkese açık siteye veya GitHub'a gönderilmez; tarayıcıdan USB üzerinden kameraya yazılır.
 
@@ -12,7 +21,7 @@ Kamera yeniden başladıktan sonra aynı bilgileri her açılışta kullanır. i
 
 ## Kullanım
 
-Güç verildiğinde kamera kendiliğinden çalışır. İlk fotoğraf uygun yeni görüntü oluşunca alınır. Sonraki çekimler arasında varsayılan olarak en az 15 saniye vardır; her 15 saniyede koşulsuz fotoğraf göndermez. Karanlık, boş veya ayrıntısı yetersiz görüntüde bekler. Kısa süreli görüntü kontrolünden sonra üç kare içinden daha uygun olanını seçer. Gönderilen fotoğrafın cevabı NotEkran tarafından gösterilene kadar yeni fotoğraf göndermez. Ekran pil görünümündeyse cevap için okuma ekranını açmak gerekebilir.
+Bu güncellemenin ilk açılışında otomatik çekim kapalıdır. Tek kare testi ve ısınma kontrolü sonrasında ayarlardan açılabilir. Açıldıktan sonra güç verildiğinde kayıtlı ayarla devam eder. İlk fotoğraf uygun yeni görüntü oluşunca alınır. Sonraki çekimler arasında varsayılan olarak en az 15 saniye vardır; her 15 saniyede koşulsuz fotoğraf göndermez. Karanlık, boş veya ayrıntısı yetersiz görüntüde bekler. Yaklaşık sekiz saniyelik aralıklarla görüntü kontrolünden sonra üç kare içinden daha uygun olanını seçer. Gönderilen fotoğrafın cevabı NotEkran tarafından gösterilene kadar yeni fotoğraf göndermez. Ekran pil görünümündeyse cevap için okuma ekranını açmak gerekebilir.
 
 USB bölümünde görünen NotCamera ağı ve koduyla telefondan `http://192.168.4.1` açılabilir. Kullanıcı adı `admin`, parola kameranın kendi kodudur. Bu kamera sayfasıdır; NotEkran'ın ağı farklıdır. İki cihazın kendi ağı da aynı yerel adresi kullanır: hangi Wi-Fi ağına bağlandıysan o cihaz açılır. Hotspot üzerinden aynı sayfa USB bölümünde gösterilen kamera IP adresinden açılabilir; iPhone hotspot erişimi ayrıca denenmelidir.
 
