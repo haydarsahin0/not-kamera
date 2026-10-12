@@ -16,7 +16,7 @@
 #include "cloud_roots.h"
 #include "setup_page.h"
 
-constexpr char CAMERA_VERSION[]="0.1.1";
+constexpr char CAMERA_VERSION[]="0.1.2";
 constexpr char API[]="https://jckoovsocynnxbrsalld.supabase.co/functions/v1/not-kamera-api";
 constexpr size_t MAX_JPEG=1024*1024,MAX_REPLY=160*1024;
 Preferences prefs;WebServer web(80);SemaphoreHandle_t mutex;
@@ -252,7 +252,8 @@ void worker(void*){
 }
 
 void setup(){
- Serial.begin(115200);setCpuFrequencyMhz(160);mutex=xSemaphoreCreateMutex();
+ // USB setup sends whole settings lines; the default 256-byte USB receive queue drops overflow.
+ Serial.setRxBufferSize(2048);Serial.begin(115200);setCpuFrequencyMhz(160);mutex=xSemaphoreCreateMutex();
  cJSON_Hooks hooks={externalAlloc,externalFree};cJSON_InitHooks(&hooks);
  prefs.begin("not-camera",false);
  settings.ssid=prefs.getString("ssid","");settings.password=prefs.getString("password","");settings.token=prefs.getString("token","");
