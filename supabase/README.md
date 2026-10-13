@@ -76,3 +76,9 @@ Display text is the direct subject answer only: no user-directed instructions,
 processing commentary, device explanations, or additional study text. Necessary
 reasoning, calculations, units, graph labels and task headings remain. Actual
 missing data is stated briefly rather than fabricated.
+
+Simple verbal questions use one short sentence; an explicitly requested brief
+justification uses at most two, usually 15–35 words per subtask. Listing tasks
+return only the requested terms. Unrequested definitions, model overviews and
+curve descriptions are omitted. Explicit complex discussions/derivations remain
+complete; this is a generation instruction, not unsafe post-generation truncation.
