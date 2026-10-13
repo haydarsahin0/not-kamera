@@ -161,3 +161,10 @@ test('long ticks and off-curve label anchors are adapted without needing a secon
  assert.equal(result.sections[0].graphs.length,2);assert.deepEqual(result.sections[0].graphs.flatMap(x=>x.y_ticks.map(t=>t.value)),[45,50]);
  for(const graph of result.sections[0].graphs)assert.deepEqual(graph.curves.map(c=>c.points),g.curves.map(c=>c.points));
 });
+test('model request uses high reasoning and the direction/sign self-check',async()=>{
+ const {modelRequest,VERIFY_INSTRUCTIONS,REASONING_EFFORT}=await import('../functions/not-kamera-api/index.ts');
+ const request=modelRequest({course:'Makroökonomie',rules:''},{mime:'image/jpeg',image_base64:'AA=='});
+ assert.equal(REASONING_EFFORT,'high');assert.deepEqual(request.reasoning,{effort:'high'});
+ assert(request.instructions.endsWith(VERIFY_INSTRUCTIONS));
+ for(const word of ['Verteilungs','Verschärfung','über vs. unter','Phillipskurve'])assert(VERIFY_INSTRUCTIONS.includes(word),word);
+});
