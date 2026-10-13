@@ -1,3 +1,18 @@
+## Active provider: Gemini 4 Argon
+
+The server reads the Supabase secret `gemini-api-key` (exact name) and calls
+`gemini-4-argon` through Google's generateContent API. No OpenAI fallback is
+used. The key stays server-side in the x-goog-api-key header. No firmware update
+is required. Ordered original photos, cross-page context, diagram validation,
+and device delivery remain unchanged.
+
+The adapter requests JSON schema output and high thinking for the first attempt,
+medium for bounded recovery. Only STOP responses are accepted; thought text and
+truncated/blocked responses never reach the display. Output wording is direct,
+concise German without filler or claims of human authorship.
+
+Earlier release notes below describe historical provider settings.
+
 # Genauere Antworten: hohe Denkstufe und Selbstkontrolle
 
 Auf echten Seiten wurden drei typische Fehler beobachtet: Verwendungs- statt Verteilungsrechnung des BIP, Lockerung statt Verschärfung des Kündigungsschutzes, umgekehrte Richtung bei der Phillipskurve. Das Modell (`gpt-6.1-sol`) arbeitet jetzt mit `reasoning.effort: high` und einer internen Kontrolle von Schlüsselbegriffen, Richtungen und Vorzeichen vor der Ausgabe. Antworten dauern etwas länger (Analysegrenze 140 s statt 110 s) und kosten mehr. Richtige Ergebnisse können weiterhin nicht garantiert werden.

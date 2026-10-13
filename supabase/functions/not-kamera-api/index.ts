@@ -1,8 +1,9 @@
+import {GEMINI_BASE,geminiRequest,geminiAnswer} from './gemini.ts';
 // Self-contained Supabase Edge Function. Secrets never enter frontend or logs.
 import {ANSWER_SCHEMA,ANSWER_FORMAT,GRAPH_INSTRUCTIONS,plainAnswer,readDocument} from './answer.ts';
 import {prepareDocument} from './graph-layout.ts';
 import {CONTEXT_INSTRUCTIONS,PAGE_ANSWER_SCHEMA,pageInput,contextDecision} from './context.ts';
-export const MODEL = 'gpt-6.1-sol';
+export const MODEL = 'gemini-4-argon';
 export const MAX_ANSWER_BYTES = 65536;
 export const MAX_BYTES = 4 * 1024 * 1024;
 const LOCAL = /^http:\/\/(?:192\.168\.[0-9]{1,3}\.[0-9]{1,3}|10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|172\.(?:1[6-9]|2[0-9]|3[01])\.[0-9]{1,3}\.[0-9]{1,3})(?::[0-9]+)?$/;
@@ -29,7 +30,7 @@ export const VERIFY_INSTRUCTIONS = `KONTROLLE VOR DER AUSGABE (intern durchführ
 3. Prüfe jede Rechnung durch Einsetzen der Werte und kontrolliere Einheit und Größenordnung.
 4. Bei Lückentexten und Auswahlantworten (richtig/falsch/unklar, über/unter/auf, größer/kleiner/unverändert, steigt/sinkt) prüfe das gewählte Wort ausdrücklich gegen deine eigene Begründung; sie müssen übereinstimmen.
 Erst danach die Lösung ausgeben.`;
-export const CONCISE_INSTRUCTIONS = `LÄNGENREGEL FÜR JEDE TEILAUFGABE: Schreibe die kürzeste fachlich vollständige Antwort. Beginne sofort mit Ergebnis oder Kernaussage. Jeder benötigte Inhaltspunkt nur einmal. Eine einfache Teilaufgabe braucht normalerweise 1–2 kurze Sätze, ohne Hintergrundabsatz.
+export const CONCISE_INSTRUCTIONS = `LÄNGENREGEL FÜR JEDE TEILAUFGABE: Nutze einfache, präzise Fachsprache. Keine Meta-Sätze wie „Hier ist die Antwort“, „Wie gewünscht“ oder „Diese Frage lässt sich wie folgt beantworten“. Keine leeren Übergänge oder belehrenden Kommentare. Schreibe direkt das fachliche Ergebnis und nur die verlangte Begründung. Formulierungen nicht absichtlich verschlechtern und keine menschliche Urheberschaft behaupten. Schreibe die kürzeste fachlich vollständige Antwort. Beginne sofort mit Ergebnis oder Kernaussage. Jeder benötigte Inhaltspunkt nur einmal. Eine einfache Teilaufgabe braucht normalerweise 1–2 kurze Sätze, ohne Hintergrundabsatz.
 Nennen: nur die verlangten Begriffe, genau die gefragte Anzahl. Definieren: ein präziser Satz. Erklären/begründen: die entscheidende Ursache-Wirkungs-Kette in 1–2 Sätzen. Berechnen: Formel, eingesetzte Werte, Ergebnis und Einheit in einer kompakten Gleichungskette; keine Erklärung jeder Umformung. Vergleichen: nur die verlangten Gemeinsamkeiten/Unterschiede. Diskutieren/beurteilen: genau die nötigen Argumente und das verlangte Urteil. Zeichnen: echte Grafik, notwendige Beschriftungen/Legende und nur die ausdrücklich gefragte Erklärung.
 Längenbeispiele, NICHT auf andere Aufgaben übertragen: Inflation definieren → "Inflation ist ein anhaltender Anstieg des allgemeinen Preisniveaus."; Wirkung höherer Staatsausgaben im IS-LM-Modell → "Höhere Staatsausgaben verschieben IS nach rechts. Einkommen und Zins steigen; höhere Zinsen dämpfen die privaten Investitionen."; Multiplikator bei c = 0,8 berechnen → "k = 1/(1 − c) = 1/0,2 = 5." Zusätzliche Mechanismen nur, wenn der konkrete Auftrag sie braucht.
 Prüfe vor der Ausgabe intern alle gefragten Teilaufgaben, erforderlichen Fachbegriffe, Rechenschritte, Einheiten, Annahmen und Grafiken. Streiche jeden Satz ohne für diesen Auftrag nötigen Inhalt. Keine Wiederholungen, Lernhinweise oder zusätzlichen Beispiele. Keine starre Wortgrenze: ausdrücklich verlangte Herleitungen, ausführliche Diskussionen und mehrere Teilfragen vollständig beantworten. Fehlende Angaben knapp benennen. Keine Note oder volle Punktzahl versprechen. Die interne Prüfung nicht ausgeben.`;
@@ -79,7 +80,7 @@ function imageBase64(bytes){let binary='';for(let i=0;i<bytes.length;i+=8192)bin
 export function modelRequest(profile,current,previous=[]){return {model:MODEL,store:false,max_output_tokens:6000,reasoning:{effort:REASONING_EFFORT},instructions:STUDY_INSTRUCTIONS+'\n'+GRAPH_INSTRUCTIONS+'\n'+CONTEXT_INSTRUCTIONS+'\n'+CONCISE_INSTRUCTIONS+'\n'+EVIDENCE_INSTRUCTIONS+'\n'+VERIFY_INSTRUCTIONS,text:{verbosity:'low',format:{type:'json_schema',name:'page_answer',strict:true,schema:PAGE_ANSWER_SCHEMA}},input:pageInput(profile,current,previous)};}
 export function createHandler({env,fetcher=fetch,waitUntil}) {
  const project=env('SUPABASE_URL'),service=env('SUPABASE_SERVICE_ROLE_KEY');
- const key=env('NOT_KAMERA_OPENAI_API_KEY');let modelCache=null;
+ const key=env('gemini-api-key');let modelCache=null;
  async function rest(path,options={}) {
   const r=await fetcher(project+'/rest/v1/'+path,{...options,headers:{apikey:service,Authorization:'Bearer '+service,'Content-Type':'application/json',Prefer:'return=representation',...options.headers},signal:AbortSignal.timeout(30000)});
   if(!r.ok){
@@ -97,10 +98,10 @@ export function createHandler({env,fetcher=fetch,waitUntil}) {
   if(rows.length!==1||!constantEqual(await hash(value.slice(7)),rows[0].token_hash))throw new ApiError(401,'Uygulama erişim kodu geçersiz.');
  }
  async function modelStatus() {
-  if(!key)return {ready:false,model:MODEL,detail:'NOT_KAMERA_OPENAI_API_KEY ayarı eksik.'};
+  if(!key)return {ready:false,model:MODEL,detail:'gemini-api-key ayarı eksik.'};
   if(modelCache&&Date.now()-modelCache.time<60000)return modelCache.value;
-  const r=await fetcher('https://api.openai.com/v1/models/'+MODEL,{headers:{Authorization:'Bearer '+key},signal:AbortSignal.timeout(12000)});
-  const value={ready:r.ok,model:MODEL};if(!r.ok)value.detail='OpenAI model erişimi doğrulanamadı (HTTP '+r.status+'). API anahtarı, hesap erişimi ve kotayı kontrol et.';
+  const r=await fetcher(GEMINI_BASE+MODEL,{headers:{'x-goog-api-key':key},signal:AbortSignal.timeout(12000)});
+  const value={ready:r.ok,model:MODEL};if(!r.ok)value.detail='Gemini model erişimi doğrulanamadı (HTTP '+r.status+'). API anahtarı, hesap erişimi ve kotayı kontrol et.';
   modelCache={time:Date.now(),value};return value;
  }
  async function selectDevice(id) {
@@ -129,13 +130,16 @@ export function createHandler({env,fetcher=fetch,waitUntil}) {
     if(attempt&&evidenceReview)request.instructions+='\n'+EVIDENCE_REVIEW;
     else if(attempt&&repairAnswer)request.instructions+='\nDARSTELLUNGSREPARATUR: Korrigiere gezielt den gemeldeten Fehler in der mitgegebenen Antwort ('+reason+'). Keine neue Herleitung unveränderter Teile. Behalte erforderliche Grafiken, alle Teilaufgaben und fachlich korrekte Werte bei. Normierte Koordinaten 0..100, höchstens 3 Kurven/Markierungen/Pfeile/Ticks je Diagramm, 2..24 Kurvenpunkte. Kurvenanker auf die eigene Kurve. Kurze eindeutige Labels mit vollständiger Legende in text. Bei zu vielen Kurven/Punkten oder dichten Ticks mehrere Diagramme mit identischem Maßstab verwenden. Keine erfundenen Werte, keine abgeschnittenen Teile, kein Text anstelle einer verlangten Zeichnung.';
     let r;
-    try{r=await fetcher('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(Math.min(attempt?remaining:95000,remaining))});}
+    try{r=await fetcher(GEMINI_BASE+MODEL+':generateContent',{method:'POST',headers:{'x-goog-api-key':key,'Content-Type':'application/json'},body:JSON.stringify(geminiRequest(request)),signal:AbortSignal.timeout(Math.min(attempt?remaining:95000,remaining))});}
     catch(e){if(!attempt&&(e.name==='TimeoutError'||e.name==='AbortError')){reason='analysis_timeout';continue;}throw e;}
-    if(!r.ok)throw new ApiError(r.status,'OpenAI analizi başarısız (HTTP '+r.status+'). API/model erişimini ve hesap kotasını kontrol et.');
+    if(!r.ok){
+     let detail='';
+     if(r.status===400||r.status===429){try{const failure=await r.json();const message=failure.error?.message;if(typeof message==='string')detail=' '+message.split(key).join('[redacted]').replace(/[\r\n]+/g,' ').slice(0,400);}catch{}}
+     throw new ApiError(r.status,'Gemini analizi başarısız (HTTP '+r.status+').'+detail);
+    }
     const data=await r.json();
-    if(data.status!=='completed')throw new ApiError(502,'OpenAI yanıtı tamamlanmadı. Eksik çözüm cihaza gönderilmedi.');
-    const answer=(data.output||[]).filter(x=>x.type==='message').flatMap(x=>x.content||[]).filter(x=>x.type==='output_text'&&typeof x.text==='string').map(x=>x.text).join('\n\n').trim();
-    if(!answer)throw new ApiError(502,'OpenAI okunabilir metin döndürmedi.');
+    let answer;try{answer=geminiAnswer(data);}catch(e){throw new ApiError(502,e.message);}
+    if(!answer)throw new ApiError(502,'Gemini okunabilir metin döndürmedi.');
     if(new TextEncoder().encode(answer).length>MAX_ANSWER_BYTES)throw new ApiError(502,'Cevap ekran kapasitesini aştı. Soruları daha küçük gruplar halinde gönder; metin kesilmedi.');
     try{
      const parsed=JSON.parse(answer);context=contextDecision(parsed.context,previous.length);document=prepareDocument(parsed.answer);
@@ -215,7 +219,7 @@ export function createHandler({env,fetcher=fetch,waitUntil}) {
     const result=await rest('rpc/not_kamera_clear',{method:'POST',body:'{}'});if(result.code)throw new ApiError(result.code,result.detail);return reply(result);
    }
    if(path==='/api/frames'&&req.method==='POST') {
-    if(!key)throw new ApiError(503,'OpenAI API anahtarı sunucuda eksik.');
+    if(!key)throw new ApiError(503,'Gemini API anahtarı sunucuda eksik.');
     const type=(req.headers.get('content-type')||'').split(';')[0];if(!['image/jpeg','image/png'].includes(type))throw new ApiError(415,'JPEG veya PNG gönder.');
     const profile=parseProfile(req.headers.get('x-study-profile'));const bytes=await readImage(req,type);
     const preview=requestUrl.searchParams.get('preview')==='1';
