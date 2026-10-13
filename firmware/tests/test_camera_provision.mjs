@@ -8,7 +8,7 @@ function fixture(device='NotCamera',dropFirst=false,extra={}){
  let line='',liveSeq=0,shot=false,sent=false;const utf8=new TextDecoder();const writer={async write(bytes){chunks.push(bytes.length);line+=utf8.decode(bytes,{stream:true});if(!line.endsWith('\n'))return;const j=JSON.parse(line);line='';commands.push(j);if(dropFirst&&commands.length===1)return;if(j.cmd==='status')respond({device,version:'0.2.1',detail:'ready',camera_ready:true,wifi:true,ip:'172.20.10.2',ap:'NotCamera-1234',code:'private-device-code',ssid:'Test iPhone',course:'Makroökonomie',rules:'',interval:15,automatic:true,sent:0,rendered:0,busy:false,...extra,...(shot&&!sent?{held:true,frame:9}:{}),...(sent?{phase:'delivered',detail:'Cevap NotEkran tarafından gösterildi.'}:{})});else if(j.cmd==='live')setImmediate(()=>respond({live:true,seq:++liveSeq,busy:false,error:'',valid:true,mean:40,light:.2,ink:.01,edge:1,spread:50,edge_min:2,image:'/9j/AA=='}));else if(j.cmd==='live_stop')respond({ok:true});else if(j.cmd==='shoot'){shot=true;respond({ok:true});}else if(j.cmd==='send'){sent=true;respond({ok:true});}else if(j.cmd==='preview')respond({frame:9,preview:'/9j/HELD'});else if(j.cmd==='orient')respond({ok:true,hmirror:j.hmirror,vflip:j.vflip});else if(j.cmd==='scan')respond({ok:true,networks:[{ssid:'Haydar iPhone’u',rssi:-40},{ssid:'Komşu',rssi:-80}]});else if(j.cmd==='test_camera')respond({ok:true});else if(j.cmd==='configure'){reset=true;respond({ok:true});}},releaseLock(){}};
  const port={async setSignals(s){signals=s;},async open(opts){assert.equal(opts.baudRate,115200);},readable:{getReader:()=>reader},writable:{getWriter:()=>writer},async close(){}};
  const timers=new Map();let n=0;const ctx={document:{getElementById:get},navigator:{serial:{requestPort:async()=>port}},TextDecoder,TextEncoder,JSON,Number,Error,console,setTimeout(fn,ms){if(ms===600||ms===200||ms===6000||ms===20||ms===500||ms===1000||ms===150){queueMicrotask(fn);return ++n;}timers.set(++n,fn);if(dropFirst&&commands.length===0)queueMicrotask(fn);return n;},clearTimeout(id){timers.delete(id);}};
- vm.runInNewContext(source,ctx);return {get,commands,chunks,reset:()=>reset,signals:()=>signals};
+ vm.runInNewContext(source,ctx);return {get,commands,chunks,reset:()=>reset,signals:()=>signals,diagnostic:raw=>vm.runInNewContext("received=1;noise="+JSON.stringify(raw)+";noReply()",ctx)};
 }
 test('camera identity checked before USB provisioning; credentials never leave USB',async()=>{
  const s=fixture();await s.get('usbConnect').onclick();assert.equal(s.get('save').disabled,false);assert.match(s.get('usbState').textContent,/NotCamera 0.2.1/);
@@ -82,4 +82,11 @@ test('manual photo: first press shoots and shows it, second press sends and foll
  const s=fixture('NotCamera',false,{automatic:false});await s.get('usbConnect').onclick();assert.equal(s.get('sendPhoto').disabled,true);
  await s.get('shoot').onclick();assert.equal(s.get('preview').src,'data:image/jpeg;base64,/9j/HELD');assert.equal(s.get('sendPhoto').disabled,false);
  await s.get('sendPhoto').onclick();assert(s.commands.some(c=>c.cmd==='send'));assert.match(s.get('usbState').textContent,/NotEkran’da gösterildi/);
+});
+
+test('missing flashed app directs recovery installation instead of a generic serial or WiFi failure',()=>{
+ const s=fixture();const text=s.diagnostic('E (24) esp_image: image at 0x10000 has invalid magic byte\nNo bootable app partitions in the partition table');
+ assert.match(text,/çalıştırılabilir NotCamera uygulaması bulunamadı/);
+ assert.match(text,/Installation complete/);assert.match(text,/Erase device kapalı/);
+ assert.doesNotMatch(text,/NotCamera cevabı okunamadı/);
 });
