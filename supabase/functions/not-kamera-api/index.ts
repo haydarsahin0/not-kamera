@@ -112,14 +112,25 @@ export function createHandler({env,fetcher=fetch,waitUntil}) {
  async function analyze(id,bytes,type,profile,previous=[]) {
   try {
    const current={mime:type,image_base64:imageBase64(bytes)},deadline=Date.now()+140000;
-   let document,context,reason='structure',evidenceReview=false;
+   let document,context,reason='structure',evidenceReview=false,repairAnswer='';
    for(let attempt=0;attempt<2;attempt++){
     const remaining=deadline-Date.now();
     if(attempt&&remaining<15000){if(evidenceReview)break;throw new ApiError(502,'Grafik düzeni otomatik düzeltilemedi ('+reason+'). Eksik cevap cihaza gönderilmedi; fotoğrafı tekrar gönder.');}
     const request=modelRequest(profile,current,previous);
+    // Reserve time for a bounded recovery. A formatting retry must see the
+    // rejected document, not solve seven original pages again from scratch.
+    if(attempt){
+     request.reasoning={effort:'medium'};
+     if(repairAnswer&&!evidenceReview)request.input.push(
+      {role:'assistant',content:[{type:'output_text',text:repairAnswer}]},
+      {role:'user',content:[{type:'input_text',text:'Korrigiere die oben zurückgewiesene Antwort. Fehlercode: '+reason+'. Bewahre fachliche Inhalte, alle aktuellen Teilaufgaben und den korrekten Bezug auf frühere Seiten. Gib das vollständige JSON zurück. Frühere Seiten werden 1-basiert nummeriert; die aktuelle Seite gehört nie in used_pages.'}]}
+     );
+    }
     if(attempt&&evidenceReview)request.instructions+='\n'+EVIDENCE_REVIEW;
-    else if(attempt)request.instructions+='\nDARSTELLUNGSREPARATUR: Die vorige Ausgabe hat die Geräteprüfung nicht bestanden ('+reason+'). Prüfe die Lösung erneut anhand derselben Originalbilder und liefere die vollständige Antwort im gleichen Schema. Behalte erforderliche Grafiken, alle Teilaufgaben und fachlich korrekte Werte bei. Normierte Koordinaten 0..100, höchstens 3 Kurven/Markierungen/Pfeile/Ticks je Diagramm, 2..24 Kurvenpunkte. Kurvenanker auf die eigene Kurve. Kurze eindeutige Labels mit vollständiger Legende in text. Bei zu vielen Kurven/Punkten oder dichten Ticks mehrere Diagramme mit identischem Maßstab verwenden. Keine erfundenen Werte, keine abgeschnittenen Teile, kein Text anstelle einer verlangten Zeichnung.';
-    const r=await fetcher('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(Math.min(135000,remaining))});
+    else if(attempt&&repairAnswer)request.instructions+='\nDARSTELLUNGSREPARATUR: Korrigiere gezielt den gemeldeten Fehler in der mitgegebenen Antwort ('+reason+'). Keine neue Herleitung unveränderter Teile. Behalte erforderliche Grafiken, alle Teilaufgaben und fachlich korrekte Werte bei. Normierte Koordinaten 0..100, höchstens 3 Kurven/Markierungen/Pfeile/Ticks je Diagramm, 2..24 Kurvenpunkte. Kurvenanker auf die eigene Kurve. Kurze eindeutige Labels mit vollständiger Legende in text. Bei zu vielen Kurven/Punkten oder dichten Ticks mehrere Diagramme mit identischem Maßstab verwenden. Keine erfundenen Werte, keine abgeschnittenen Teile, kein Text anstelle einer verlangten Zeichnung.';
+    let r;
+    try{r=await fetcher('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(Math.min(attempt?remaining:95000,remaining))});}
+    catch(e){if(!attempt&&(e.name==='TimeoutError'||e.name==='AbortError')){reason='analysis_timeout';continue;}throw e;}
     if(!r.ok)throw new ApiError(r.status,'OpenAI analizi başarısız (HTTP '+r.status+'). API/model erişimini ve hesap kotasını kontrol et.');
     const data=await r.json();
     if(data.status!=='completed')throw new ApiError(502,'OpenAI yanıtı tamamlanmadı. Eksik çözüm cihaza gönderilmedi.');
@@ -133,6 +144,7 @@ export function createHandler({env,fetcher=fetch,waitUntil}) {
     }catch(e){
      // Bounded reason codes only. Never echo generated content into logs/errors.
      reason=typeof e.message==='string'?e.message.match(/\(([a-z0-9_]+)\)/)?.[1]||'structure':'structure';
+     repairAnswer=answer;
      if(attempt)throw new ApiError(502,'Grafik düzeni otomatik düzeltilemedi ('+reason+'). Eksik cevap cihaza gönderilmedi; fotoğrafı tekrar gönder.');
     }
    }
@@ -210,7 +222,7 @@ export function createHandler({env,fetcher=fetch,waitUntil}) {
     const requestId=req.headers.get('x-request-id')||null;
     if(requestId&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId))throw new ApiError(400,'Fotoğraf istek kimliği geçersiz.');
     const reset=req.headers.get('x-study-reset')||'0';if(!['0','1'].includes(reset))throw new ApiError(400,'Yeni çalışma seçeneği geçersiz.');
-    const fingerprint=await hash((await hash(bytes))+JSON.stringify(profile)+STUDY_INSTRUCTIONS+CONTEXT_INSTRUCTIONS+GRAPH_INSTRUCTIONS+CONCISE_INSTRUCTIONS+EVIDENCE_INSTRUCTIONS+EVIDENCE_REVIEW+VERIFY_INSTRUCTIONS+'effort:'+REASONING_EFFORT+'verbosity:low'+JSON.stringify(PAGE_ANSWER_SCHEMA)+MODEL+(preview?'preview':'live'));
+    const fingerprint=await hash((await hash(bytes))+JSON.stringify(profile)+STUDY_INSTRUCTIONS+CONTEXT_INSTRUCTIONS+GRAPH_INSTRUCTIONS+CONCISE_INSTRUCTIONS+EVIDENCE_INSTRUCTIONS+EVIDENCE_REVIEW+VERIFY_INSTRUCTIONS+'recovery:v2'+'effort:'+REASONING_EFFORT+'verbosity:low'+JSON.stringify(PAGE_ANSWER_SCHEMA)+MODEL+(preview?'preview':'live'));
     const result=await rest('rpc/not_kamera_claim_frame',{method:'POST',body:JSON.stringify({p_fingerprint:fingerprint,p_profile:await hash(JSON.stringify(profile)),p_image:imageBase64(bytes),p_mime:type,p_request_id:requestId,p_reset:reset==='1',p_preview:preview})});if(result.code)throw new ApiError(result.code,result.detail);
     const {previous=[],...publicResult}=result;
     if(!result.duplicate)waitUntil(analyze(result.id,bytes,type,profile,previous));

@@ -31,3 +31,18 @@ preserves genuine uncertainty; it does not substitute canned answers. It shares
 the existing two-request/140-second budget with layout repair. Normal answers
 still require one request. Prompt changes participate in the image fingerprint
 so an old cached answer is not reused. This is a server-only update.
+
+### 2026-10-13: continuation recovery
+
+Production continuation jobs failed with both analysis timeouts and validation
+errors. The first high-reasoning request now has a 95-second timeout, reserving
+part of the existing 140-second total budget for one medium-reasoning recovery.
+Original prior/current photos are retained. A layout/context repair receives the
+rejected JSON plus a bounded error code instead of blindly generating it again.
+Context-reference failures have their own code. No extra model, credentials,
+firmware changes, context deletion, or silently truncated answers are involved.
+
+Tests cover timeout recovery, exact original-image preservation, rejected JSON
+being included in repair, graph delivery, context validation, and real missing
+information remaining uncertain. Recovery is bounded, not a guarantee against
+all future network/model failures.

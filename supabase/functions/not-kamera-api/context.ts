@@ -21,6 +21,6 @@ export function pageInput(profile,current,previous){
  return [{role:'user',content}];
 }
 export function contextDecision(value,count){
- if(!value||!['independent','uses_previous','missing_context'].includes(value.decision)||!Array.isArray(value.used_pages)||value.used_pages.length>count||new Set(value.used_pages).size!==value.used_pages.length||value.used_pages.some(n=>!Number.isInteger(n)||n<1||n>count)||value.decision==='independent'&&value.used_pages.length||value.decision==='uses_previous'&&!value.used_pages.length)throw Error('Sayfa bağlantısı doğrulanamadı.');
+ if(!value||!['independent','uses_previous','missing_context'].includes(value.decision)||!Array.isArray(value.used_pages)||value.used_pages.length>count||new Set(value.used_pages).size!==value.used_pages.length||value.used_pages.some(n=>!Number.isInteger(n)||n<1||n>count)||value.decision==='independent'&&value.used_pages.length||value.decision==='uses_previous'&&!value.used_pages.length)throw Error('Sayfa bağlantısı doğrulanamadı (context_reference).');
  return value;
 }
