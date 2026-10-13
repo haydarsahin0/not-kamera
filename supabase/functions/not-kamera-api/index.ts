@@ -13,6 +13,16 @@ export const STUDY_INSTRUCTIONS = "Du unterstützt bei fachlichen Aufgaben auf U
 // a loosening instead of a tightening, and flipped a Phillips-curve direction. High reasoning plus an explicit
 // direction/sign check targets exactly these slips.
 export const REASONING_EFFORT = 'high';
+export const EVIDENCE_INSTRUCTIONS = `AUFGABENTEXT, MODELLWISSEN UND ABBILDUNGEN TRENNEN:
+Ein genanntes Modell ist keine fehlende Abbildung. Löse qualitative Theoriefragen aus dem lesbaren Arbeitsauftrag und dem fachlichen Modellwissen; dafür sind weder eine vorgegebene Grafik noch Zahlenwerte nötig. Leere Antwortlinien sind kein fehlendes Diagramm. Eine selbst zu zeichnende Grafik ist ein Ergebnis, keine vorausgesetzte Bildquelle. Nur wenn die Aufgabe ausdrücklich Daten aus einer bestimmten Abbildung/Tabelle verlangt, müssen diese dort ablesbar sein.
+Lies pro Teilaufgabe Modellvariante, Intervention, Richtung und konstant gehaltene Größen aus dem Text. Wörter wie steigt, sinkt, Senkung, unverändert oder reagiert nicht sind bereits Angaben. Prüfe vor jeder Meldung „nicht lesbar“ die betreffende Textzeile erneut; verwechsle keine theoretisch herzuleitende Wirkung mit einer fehlenden Angabe. Fachwissen ist zulässig, erfundene Beobachtungen oder Zahlen sind es nicht.
+Modellvarianten haben Vorrang vor allgemeinen Beispielen: Bei Zinssteuerung ist der von der Zentralbank fixierte Zins konstant; nicht ungeprüft eine steigende LM-Kurve unterstellen. Leitzins und um eine Risikoprämie erhöhter Kreditzins sind verschiedene Größen. Leite Investitions- und Produktionswirkungen aus der tatsächlich geltenden Variante ab. Diese Regeln sind keine vorgefertigten Antworten; Richtung und Annahmen jeder Aufgabe neu prüfen.
+Bei eigenständigen Aufgaben bedeutet „ausschließlich deren Angaben“: keine fremden Aufgabendaten übernehmen, aber fachliches Modellwissen zur Herleitung nutzen. Fehlende genaue Zahlen verhindern keine qualitative Antwort. Wirklich unlesbare oder notwendige fehlende Angaben weiterhin konkret benennen; keine Richtung raten. Beantworte die davon unabhängigen Teile trotzdem. graphs bleibt bei reinen Erklärungsfragen leer.`;
+export const EVIDENCE_REVIEW = `LESBARKEITSPRÜFUNG: Prüfe dieselben Originalbilder erneut, besonders die aktuelle Aufgabenzeile. Unterscheide tatsächlich fehlende/unlesbare Angaben von einer aus Text und Modellwissen herzuleitenden Wirkung. Eine bloße Modellnennung verlangt keine vorhandene Grafik. Liefere die gesamte aktuelle Seite erneut im selben Schema. Wenn die notwendige Angabe wirklich fehlt oder unlesbar bleibt, benenne sie weiterhin ehrlich und konkret; keine erzwungene Lösung und keine erfundenen Werte. Übernimm keine Vermutung aus einer vorherigen Antwort.`;
+export function needsEvidenceReview(parsed) {
+ if(parsed.context?.decision==='missing_context')return true;
+ return (parsed.answer?.sections||[]).some(s=>/\b(?:unlesbar|nicht\s+(?:eindeutig\s+|sicher\s+|klar\s+)?(?:lesbar|erkennbar|ablesbar)|(?:angaben?|daten|werte?|grafik|abbildung|diagramm|kontext)\s+(?:fehlt|fehlen))\b/iu.test(s.text||''));
+}
 export const VERIFY_INSTRUCTIONS = `KONTROLLE VOR DER AUSGABE (intern durchführen, nicht ausgeben):
 1. Lies jede Aufgabenstellung erneut Wort für Wort. Prüfe die Schlüsselbegriffe, die Perspektive oder Richtung festlegen, z. B. Verteilungs- vs. Verwendungs- vs. Entstehungsrechnung, Verschärfung vs. Lockerung, Anstieg vs. Rückgang, über vs. unter, nominal vs. real, kurz- vs. mittelfristig, Angebot vs. Nachfrage. Beantworte genau die gefragte Variante, nicht ihr Gegenteil.
 2. Leite jede Richtungs- und Vorzeichenaussage aus der passenden Modellgleichung oder Kurvenverschiebung ab (z. B. Phillipskurve π − πᵉ = −α(u − uₙ), WS-PS-Modell, IS-LM, Multiplikator, Zinsparität) und prüfe das Ergebnis anschließend rückwärts an derselben Gleichung.
@@ -66,7 +76,7 @@ async function readImage(req,type) {
 async function hash(data){const bytes=typeof data==='string'?new TextEncoder().encode(data):data;return [...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(x=>x.toString(16).padStart(2,'0')).join('');}
 function constantEqual(a,b){if(a.length!==b.length)return false;let diff=0;for(let i=0;i<a.length;i++)diff|=a.charCodeAt(i)^b.charCodeAt(i);return diff===0;}
 function imageBase64(bytes){let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(binary);}
-export function modelRequest(profile,current,previous=[]){return {model:MODEL,store:false,max_output_tokens:6000,reasoning:{effort:REASONING_EFFORT},instructions:STUDY_INSTRUCTIONS+'\n'+GRAPH_INSTRUCTIONS+'\n'+CONTEXT_INSTRUCTIONS+'\n'+CONCISE_INSTRUCTIONS+'\n'+VERIFY_INSTRUCTIONS,text:{verbosity:'low',format:{type:'json_schema',name:'page_answer',strict:true,schema:PAGE_ANSWER_SCHEMA}},input:pageInput(profile,current,previous)};}
+export function modelRequest(profile,current,previous=[]){return {model:MODEL,store:false,max_output_tokens:6000,reasoning:{effort:REASONING_EFFORT},instructions:STUDY_INSTRUCTIONS+'\n'+GRAPH_INSTRUCTIONS+'\n'+CONTEXT_INSTRUCTIONS+'\n'+CONCISE_INSTRUCTIONS+'\n'+EVIDENCE_INSTRUCTIONS+'\n'+VERIFY_INSTRUCTIONS,text:{verbosity:'low',format:{type:'json_schema',name:'page_answer',strict:true,schema:PAGE_ANSWER_SCHEMA}},input:pageInput(profile,current,previous)};}
 export function createHandler({env,fetcher=fetch,waitUntil}) {
  const project=env('SUPABASE_URL'),service=env('SUPABASE_SERVICE_ROLE_KEY');
  const key=env('NOT_KAMERA_OPENAI_API_KEY');let modelCache=null;
@@ -102,12 +112,13 @@ export function createHandler({env,fetcher=fetch,waitUntil}) {
  async function analyze(id,bytes,type,profile,previous=[]) {
   try {
    const current={mime:type,image_base64:imageBase64(bytes)},deadline=Date.now()+140000;
-   let document,context,reason='structure';
+   let document,context,reason='structure',evidenceReview=false;
    for(let attempt=0;attempt<2;attempt++){
     const remaining=deadline-Date.now();
-    if(attempt&&remaining<15000)throw new ApiError(502,'Grafik düzeni otomatik düzeltilemedi ('+reason+'). Eksik cevap cihaza gönderilmedi; fotoğrafı tekrar gönder.');
+    if(attempt&&remaining<15000){if(evidenceReview)break;throw new ApiError(502,'Grafik düzeni otomatik düzeltilemedi ('+reason+'). Eksik cevap cihaza gönderilmedi; fotoğrafı tekrar gönder.');}
     const request=modelRequest(profile,current,previous);
-    if(attempt)request.instructions+='\nDARSTELLUNGSREPARATUR: Die vorige Ausgabe hat die Geräteprüfung nicht bestanden ('+reason+'). Prüfe die Lösung erneut anhand derselben Originalbilder und liefere die vollständige Antwort im gleichen Schema. Behalte erforderliche Grafiken, alle Teilaufgaben und fachlich korrekte Werte bei. Normierte Koordinaten 0..100, höchstens 3 Kurven/Markierungen/Pfeile/Ticks je Diagramm, 2..24 Kurvenpunkte. Kurvenanker auf die eigene Kurve. Kurze eindeutige Labels mit vollständiger Legende in text. Bei zu vielen Kurven/Punkten oder dichten Ticks mehrere Diagramme mit identischem Maßstab verwenden. Keine erfundenen Werte, keine abgeschnittenen Teile, kein Text anstelle einer verlangten Zeichnung.';
+    if(attempt&&evidenceReview)request.instructions+='\n'+EVIDENCE_REVIEW;
+    else if(attempt)request.instructions+='\nDARSTELLUNGSREPARATUR: Die vorige Ausgabe hat die Geräteprüfung nicht bestanden ('+reason+'). Prüfe die Lösung erneut anhand derselben Originalbilder und liefere die vollständige Antwort im gleichen Schema. Behalte erforderliche Grafiken, alle Teilaufgaben und fachlich korrekte Werte bei. Normierte Koordinaten 0..100, höchstens 3 Kurven/Markierungen/Pfeile/Ticks je Diagramm, 2..24 Kurvenpunkte. Kurvenanker auf die eigene Kurve. Kurze eindeutige Labels mit vollständiger Legende in text. Bei zu vielen Kurven/Punkten oder dichten Ticks mehrere Diagramme mit identischem Maßstab verwenden. Keine erfundenen Werte, keine abgeschnittenen Teile, kein Text anstelle einer verlangten Zeichnung.';
     const r=await fetcher('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(Math.min(135000,remaining))});
     if(!r.ok)throw new ApiError(r.status,'OpenAI analizi başarısız (HTTP '+r.status+'). API/model erişimini ve hesap kotasını kontrol et.');
     const data=await r.json();
@@ -116,7 +127,9 @@ export function createHandler({env,fetcher=fetch,waitUntil}) {
     if(!answer)throw new ApiError(502,'OpenAI okunabilir metin döndürmedi.');
     if(new TextEncoder().encode(answer).length>MAX_ANSWER_BYTES)throw new ApiError(502,'Cevap ekran kapasitesini aştı. Soruları daha küçük gruplar halinde gönder; metin kesilmedi.');
     try{
-     const parsed=JSON.parse(answer);context=contextDecision(parsed.context,previous.length);document=prepareDocument(parsed.answer);break;
+     const parsed=JSON.parse(answer);context=contextDecision(parsed.context,previous.length);document=prepareDocument(parsed.answer);
+     if(!attempt&&needsEvidenceReview(parsed)){evidenceReview=true;continue;}
+     break;
     }catch(e){
      // Bounded reason codes only. Never echo generated content into logs/errors.
      reason=typeof e.message==='string'?e.message.match(/\(([a-z0-9_]+)\)/)?.[1]||'structure':'structure';
@@ -197,7 +210,7 @@ export function createHandler({env,fetcher=fetch,waitUntil}) {
     const requestId=req.headers.get('x-request-id')||null;
     if(requestId&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId))throw new ApiError(400,'Fotoğraf istek kimliği geçersiz.');
     const reset=req.headers.get('x-study-reset')||'0';if(!['0','1'].includes(reset))throw new ApiError(400,'Yeni çalışma seçeneği geçersiz.');
-    const fingerprint=await hash((await hash(bytes))+JSON.stringify(profile)+STUDY_INSTRUCTIONS+CONTEXT_INSTRUCTIONS+GRAPH_INSTRUCTIONS+CONCISE_INSTRUCTIONS+VERIFY_INSTRUCTIONS+'effort:'+REASONING_EFFORT+'verbosity:low'+JSON.stringify(PAGE_ANSWER_SCHEMA)+MODEL+(preview?'preview':'live'));
+    const fingerprint=await hash((await hash(bytes))+JSON.stringify(profile)+STUDY_INSTRUCTIONS+CONTEXT_INSTRUCTIONS+GRAPH_INSTRUCTIONS+CONCISE_INSTRUCTIONS+EVIDENCE_INSTRUCTIONS+EVIDENCE_REVIEW+VERIFY_INSTRUCTIONS+'effort:'+REASONING_EFFORT+'verbosity:low'+JSON.stringify(PAGE_ANSWER_SCHEMA)+MODEL+(preview?'preview':'live'));
     const result=await rest('rpc/not_kamera_claim_frame',{method:'POST',body:JSON.stringify({p_fingerprint:fingerprint,p_profile:await hash(JSON.stringify(profile)),p_image:imageBase64(bytes),p_mime:type,p_request_id:requestId,p_reset:reset==='1',p_preview:preview})});if(result.code)throw new ApiError(result.code,result.detail);
     const {previous=[],...publicResult}=result;
     if(!result.duplicate)waitUntil(analyze(result.id,bytes,type,profile,previous));

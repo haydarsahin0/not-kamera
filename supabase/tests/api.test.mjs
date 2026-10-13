@@ -168,3 +168,22 @@ test('model request uses high reasoning and the direction/sign self-check',async
  assert(request.instructions.endsWith(VERIFY_INSTRUCTIONS));
  for(const word of ['Verteilungs','Verschärfung','über vs. unter','Phillipskurve'])assert(VERIFY_INSTRUCTIONS.includes(word),word);
 });
+
+test('unreadable claim gets one original-image review before delivery, without inventing a graph',async()=>{
+ const good={format:'not-ekran-answer-v1',sections:[{task:'Aufgabe 9)',text:'Die höhere Risikoprämie verteuert Kredite. Investitionen und Produktion sinken.',graphs:[]}]};
+ const s=setup({answers:['Die Richtung der Risikoprämienänderung ist nicht lesbar.',good],previous:[{mime:'image/png',image_base64:'cHJpb3I='}]});
+ await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png','X-Study-Profile':btoa('{"course":"Statistik"}')}}));await Promise.all(s.tasks);
+ const calls=s.calls.filter(x=>x.url.endsWith('/responses')).map(x=>JSON.parse(x.opts.body));
+ assert.equal(calls.length,2);assert.deepEqual(calls[0].input,calls[1].input);
+ assert.match(calls[1].instructions,/LESBARKEITSPRÜFUNG/);assert.doesNotMatch(calls[1].instructions,/DARSTELLUNGSREPARATUR/);
+ assert.equal(s.jobs[0].status,'done');assert.deepEqual(JSON.parse(s.jobs[0].answer),good);
+ assert.match(calls[0].instructions,/Ein genanntes Modell ist keine fehlende Abbildung/);
+ assert.match(calls[0].instructions,/Zinssteuerung/);
+});
+test('genuinely unreadable data remains uncertain after the bounded review',async()=>{
+ const s=setup({answer:'Der Zahlenwert ist nicht lesbar.',decision:{decision:'missing_context',used_pages:[]}});
+ await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png','X-Study-Profile':btoa('{"course":"Statistik"}')}}));await Promise.all(s.tasks);
+ assert.equal(s.calls.filter(x=>x.url.endsWith('/responses')).length,2);
+ assert.equal(s.jobs[0].status,'done');assert.equal(s.jobs[0].context_decision,'missing_context');
+ assert.match(JSON.parse(s.jobs[0].answer).sections[0].text,/nicht lesbar/);
+});

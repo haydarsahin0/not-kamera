@@ -17,3 +17,17 @@ Die Antwortregeln sind für jede Teilfrage enger gefasst: eine Definition in ein
 Ausdrücklich verlangte Herleitungen, Diskussionen und Grafiken bleiben vollständig. Wiederholungen und zusätzliche allgemeine Erklärungen sollen entfallen. Der Antworttext wird nicht nachträglich abgeschnitten. Richtige Ergebnisse oder eine bestimmte Note können nicht garantiert werden.
 
 Die Regeln gelten für neu gesendete Fotos. Für den automatischen Seitenwechsel nach 50 Sekunden wird das [Geräteupdate 0.10.2](https://haydarsahin0.github.io/not-kamera/install/?v=0.10.2) benötigt.
+
+### 2026-10-13: theory questions and unsupported unreadability claims
+
+The answer instructions distinguish a named theoretical model from a supplied
+figure. Qualitative questions can use domain knowledge without numeric data or
+an existing diagram. Explicit model variants (e.g. interest-rate targeting) take
+precedence over generic examples. All other recent camera/device changes remain.
+
+A structurally valid answer claiming unreadable data or missing context gets one
+additional reading of the same original images when time permits. The review
+preserves genuine uncertainty; it does not substitute canned answers. It shares
+the existing two-request/140-second budget with layout repair. Normal answers
+still require one request. Prompt changes participate in the image fingerprint
+so an old cached answer is not reused. This is a server-only update.
