@@ -71,3 +71,8 @@ coordinate, graph, context-reference, and size limits before delivery.
 All subjects use concise exam-answer formatting: direct results, natural factual
 sentences, lists for listing tasks, necessary calculations and explanations only.
 No claims of human authorship, deliberate mistakes, or invented exam rules.
+
+Display text is the direct subject answer only: no user-directed instructions,
+processing commentary, device explanations, or additional study text. Necessary
+reasoning, calculations, units, graph labels and task headings remain. Actual
+missing data is stated briefly rather than fabricated.
