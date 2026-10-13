@@ -1,12 +1,12 @@
 ## Active provider: Gemini 4 Argon
 
-The server reads the Supabase secret `gemini-api-key` (exact name) and calls
+The server reads the Supabase secret `gemini-key` (exact name) and calls
 `gemini-4-argon` through Google's generateContent API. No OpenAI fallback is
 used. The key stays server-side in the x-goog-api-key header. No firmware update
 is required. Ordered original photos, cross-page context, diagram validation,
 and device delivery remain unchanged.
 
-The adapter requests JSON schema output and high thinking for the first attempt,
+The adapter requests typed JSON schema output and high thinking for the first attempt,
 medium for bounded recovery. Only STOP responses are accepted; thought text and
 truncated/blocked responses never reach the display. Output wording is direct,
 concise German without filler or claims of human authorship.
@@ -61,3 +61,9 @@ Tests cover timeout recovery, exact original-image preservation, rejected JSON
 being included in repair, graph delivery, context validation, and real missing
 information remaining uncertain. Recovery is bounded, not a guarantee against
 all future network/model failures.
+
+The active secret name is `gemini-key`. The REST adapter uses enum values
+`APPLICATION_JSON` and `HIGH`/`MEDIUM`. Gemini's transport schema retains data
+types, required fields, and enums but omits numeric/cardinality/extra-property
+constraints rejected by the provider. The unchanged device validation enforces
+coordinate, graph, context-reference, and size limits before delivery.

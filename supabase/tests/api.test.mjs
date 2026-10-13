@@ -7,8 +7,8 @@ function setup({incomplete=false,answer='Aufgabe 1)\n2 + 2 = 4',previous=[],deci
   if(url.endsWith(':generateContent')){
    const raw=JSON.parse(opts.body);
    assert.equal(opts.headers['x-goog-api-key'],'private-gemini');
-   assert.equal(raw.generationConfig.responseMimeType,'application/json');
-   const normalized={model:MODEL,store:false,instructions:raw.systemInstruction.parts[0].text,reasoning:{effort:raw.generationConfig.thinkingConfig.thinkingLevel},text:{verbosity:'low',format:{type:'json_schema',strict:true,schema:raw.generationConfig.responseJsonSchema}},input:raw.contents.map(m=>({role:m.role==='model'?'assistant':'user',content:m.parts.map(p=>p.inlineData?{type:'input_image',image_url:'data:'+p.inlineData.mimeType+';base64,'+p.inlineData.data,detail:'high'}:{type:m.role==='model'?'output_text':'input_text',text:p.text})}))};
+   assert.equal(raw.generationConfig.responseFormat.text.mimeType,'APPLICATION_JSON');
+   const normalized={model:MODEL,store:false,instructions:raw.systemInstruction.parts[0].text,reasoning:{effort:raw.generationConfig.thinkingConfig.thinkingLevel.toLowerCase()},text:{verbosity:'low',format:{type:'json_schema',strict:true,schema:raw.generationConfig.responseFormat.text.schema}},input:raw.contents.map(m=>({role:m.role==='model'?'assistant':'user',content:m.parts.map(p=>p.inlineData?{type:'input_image',image_url:'data:'+p.inlineData.mimeType+';base64,'+p.inlineData.data,detail:'high'}:{type:m.role==='model'?'output_text':'input_text',text:p.text})}))};
    opts={...opts,body:JSON.stringify(normalized)};
   }
   calls.push({url,opts});
@@ -21,7 +21,7 @@ function setup({incomplete=false,answer='Aufgabe 1)\n2 + 2 = 4',previous=[],deci
   if(url.endsWith(':generateContent')){if(firstTimeout&&modelCalls++===0)throw new DOMException('Timed out','TimeoutError');const answerValue=answers?answers[Math.min(modelCalls++,answers.length-1)]:answer;const p=JSON.parse(opts.body);assert.equal(p.model,'gemini-4-argon');assert.equal(p.store,false);assert.match(p.instructions,/Aufgabe 1\)/);assert.match(p.instructions,/so kurz wie möglich und so ausführlich wie nötig/);assert.match(p.instructions,/Erkläre die Bedeutung des Ergebnisses nur, wenn gefragt oder fachlich nötig/);assert.match(p.instructions,/Jede Teilaufgabe erhält ihre eigene vollständige/);assert.match(p.input[0].content[0].text,/Statistik/);assert.equal(p.text.verbosity,'low');assert.match(p.instructions,/LÄNGENREGEL FÜR JEDE TEILAUFGABE/);assert.match(p.instructions,/kompakten Gleichungskette/);assert.match(p.instructions,/ausdrücklich verlangte Herleitungen/);assert.equal(p.text.format.type,'json_schema');assert.equal(p.text.format.strict,true);assert.match(p.instructions,/liefere tatsächlich mindestens ein graphs-Objekt/);return Response.json({candidates:[{finishReason:incomplete?'MAX_TOKENS':'STOP',content:{parts:[{text:JSON.stringify({context:decision,answer:typeof answerValue==='string'?{format:'not-ekran-answer-v1',sections:[{task:'Aufgabe 1)',text:answerValue.replace(/^Aufgabe 1\)\n/,''),graphs:[]}]}:answerValue})}]}}]});}
   throw Error('Unexpected '+url);
  };
- const env=name=>({SUPABASE_URL:'https://project.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'private-service','gemini-api-key':'private-gemini'})[name];
+ const env=name=>({SUPABASE_URL:'https://project.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'private-service','gemini-key':'private-gemini'})[name];
  return {handler:createHandler({env,fetcher,waitUntil:p=>tasks.push(p)}),tasks,calls,jobs,device};
 }
 function photo(){const bytes=new Uint8Array(30);bytes.set([137,80,78,71,13,10,26,10],0);bytes.set([73,72,68,82],12);const v=new DataView(bytes.buffer);v.setUint32(16,200);v.setUint32(20,200);return bytes;}

@@ -80,7 +80,7 @@ function imageBase64(bytes){let binary='';for(let i=0;i<bytes.length;i+=8192)bin
 export function modelRequest(profile,current,previous=[]){return {model:MODEL,store:false,max_output_tokens:6000,reasoning:{effort:REASONING_EFFORT},instructions:STUDY_INSTRUCTIONS+'\n'+GRAPH_INSTRUCTIONS+'\n'+CONTEXT_INSTRUCTIONS+'\n'+CONCISE_INSTRUCTIONS+'\n'+EVIDENCE_INSTRUCTIONS+'\n'+VERIFY_INSTRUCTIONS,text:{verbosity:'low',format:{type:'json_schema',name:'page_answer',strict:true,schema:PAGE_ANSWER_SCHEMA}},input:pageInput(profile,current,previous)};}
 export function createHandler({env,fetcher=fetch,waitUntil}) {
  const project=env('SUPABASE_URL'),service=env('SUPABASE_SERVICE_ROLE_KEY');
- const key=env('gemini-api-key');let modelCache=null;
+ const key=env('gemini-key');let modelCache=null;
  async function rest(path,options={}) {
   const r=await fetcher(project+'/rest/v1/'+path,{...options,headers:{apikey:service,Authorization:'Bearer '+service,'Content-Type':'application/json',Prefer:'return=representation',...options.headers},signal:AbortSignal.timeout(30000)});
   if(!r.ok){
@@ -98,7 +98,7 @@ export function createHandler({env,fetcher=fetch,waitUntil}) {
   if(rows.length!==1||!constantEqual(await hash(value.slice(7)),rows[0].token_hash))throw new ApiError(401,'Uygulama erişim kodu geçersiz.');
  }
  async function modelStatus() {
-  if(!key)return {ready:false,model:MODEL,detail:'gemini-api-key ayarı eksik.'};
+  if(!key)return {ready:false,model:MODEL,detail:'gemini-key ayarı eksik.'};
   if(modelCache&&Date.now()-modelCache.time<60000)return modelCache.value;
   const r=await fetcher(GEMINI_BASE+MODEL,{headers:{'x-goog-api-key':key},signal:AbortSignal.timeout(12000)});
   const value={ready:r.ok,model:MODEL};if(!r.ok)value.detail='Gemini model erişimi doğrulanamadı (HTTP '+r.status+'). API anahtarı, hesap erişimi ve kotayı kontrol et.';
