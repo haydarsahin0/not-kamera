@@ -67,3 +67,7 @@ The active secret name is `gemini-key`. The REST adapter uses enum values
 types, required fields, and enums but omits numeric/cardinality/extra-property
 constraints rejected by the provider. The unchanged device validation enforces
 coordinate, graph, context-reference, and size limits before delivery.
+
+All subjects use concise exam-answer formatting: direct results, natural factual
+sentences, lists for listing tasks, necessary calculations and explanations only.
+No claims of human authorship, deliberate mistakes, or invented exam rules.
