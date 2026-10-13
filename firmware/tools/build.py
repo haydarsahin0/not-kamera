@@ -28,7 +28,7 @@ for name,offset,blob in parts:
         assert erase_end<=start or erase_start>=end,'Protected data would be erased'
     (out/name).write_bytes(blob)
     metadata.append({'path':name,'offset':offset,'bytes':len(blob),'sha256':hashlib.sha256(blob).hexdigest()})
-manifest={'name':'Not Ekran V2','version':version,'new_install_prompt_erase':True,'new_install_improv_wait_time':0,
+manifest={'name':'Not Ekran V2','version':version,'new_install_prompt_erase':False,'new_install_improv_wait_time':0,
           'builds':[{'chipFamily':'ESP32-S3','improv':False,'parts':[{'path':p['path']+'?v='+version,'offset':p['offset']} for p in metadata]}]}
 (out/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
 meta={'version':version,'board':'Waveshare ESP32-S3-ePaper-1.54 V2','arduino_esp32':'3.3.0','gfx':'1.12.1',

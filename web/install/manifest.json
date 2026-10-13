@@ -1,7 +1,7 @@
 {
   "name": "Not Ekran V2",
-  "version": "0.10.3",
-  "new_install_prompt_erase": true,
+  "version": "0.10.4",
+  "new_install_prompt_erase": false,
   "new_install_improv_wait_time": 0,
   "builds": [
     {
@@ -9,19 +9,19 @@
       "improv": false,
       "parts": [
         {
-          "path": "bootloader.bin?v=0.10.3",
+          "path": "bootloader.bin?v=0.10.4",
           "offset": 0
         },
         {
-          "path": "partitions.bin?v=0.10.3",
+          "path": "partitions.bin?v=0.10.4",
           "offset": 32768
         },
         {
-          "path": "boot-app0.bin?v=0.10.3",
+          "path": "boot-app0.bin?v=0.10.4",
           "offset": 57344
         },
         {
-          "path": "not-ekran-v2.bin?v=0.10.3",
+          "path": "not-ekran-v2.bin?v=0.10.4",
           "offset": 65536
         }
       ]

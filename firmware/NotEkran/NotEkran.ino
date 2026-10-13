@@ -242,6 +242,14 @@ void setup(){
  cloudSetToken(prefs.getString("cloud-token",""));
  devicePassword=prefs.getString("code","");if(devicePassword.length()!=16){devicePassword=randomCode();prefs.putString("code",devicePassword);}
  csrf=randomCode();savedSsid=prefs.getString("ssid","");savedPassword=prefs.getString("wifi-pass","");
+ // Only the known renamed network is changed, once. Preserve the saved password and cloud token.
+ if(!prefs.getBool("zhg009-moved",false)){
+  String previous=savedSsid;previous.toLowerCase();
+  if(previous.startsWith("haydar iphone")&&savedPassword.length()>=8){
+   if(prefs.putString("ssid","zhg009")>0){savedSsid="zhg009";prefs.putBool("zhg009-moved",true);}
+  }
+ }
+
  uint64_t mac=ESP.getEfuseMac();char suffix[5];snprintf(suffix,sizeof(suffix),"%04X",(unsigned)(mac&0xffff));apName="NotEkran-"+String(suffix);
  WiFi.mode(WIFI_AP_STA);WiFi.setAutoReconnect(true);WiFi.softAP(apName.c_str(),devicePassword.c_str());
  if(savedSsid.length())WiFi.begin(savedSsid.c_str(),savedPassword.c_str());

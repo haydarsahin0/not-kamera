@@ -18,7 +18,7 @@
 #include "cloud_roots.h"
 #include "setup_page.h"
 
-constexpr char CAMERA_VERSION[]="0.2.0";
+constexpr char CAMERA_VERSION[]="0.2.1";
 constexpr char API[]="https://jckoovsocynnxbrsalld.supabase.co/functions/v1/not-kamera-api";
 constexpr size_t MAX_JPEG=3*1024*1024,MAX_REPLY=160*1024;
 Preferences prefs;WebServer web(80);SemaphoreHandle_t mutex;
@@ -29,13 +29,15 @@ uint32_t rebootAt=0;bool rebootRequested=false,clearRequested=false,testRequeste
 String cameraError;
 // Last station disconnect reason (wifi_err_reason_t), 0 after an address is obtained; shown on the USB page.
 volatile int wifiReason=0;volatile bool wifiScanning=false;
+struct Settings {String ssid,password,token,course="Makroökonomie",rules;NoteCapture::Limits limits;bool automatic=false;};
+Settings settings;NoteCapture::Policy policy;
+
 // Hotspot names are typed by hand ("Haydar iPhone'u") but broadcast with typographic apostrophes, other
 // spacing or case ("Haydar iPhone’u"). Compare names without quotes, spaces, punctuation and case.
 String looseName(String v){v.replace("\xE2\x80\x99","");v.replace("\xE2\x80\x98","");String out;
  for(size_t i=0;i<v.length();++i){unsigned char ch=v[i];if(ch>=0x80||isalnum(ch))out+=char(ch>=0x80?ch:tolower(ch));}return out;}
 String visibleNetworks="[]";int visibleCount=-1;SemaphoreHandle_t scanLock;
-struct Settings {String ssid,password,token,course="Makroökonomie",rules;NoteCapture::Limits limits;bool automatic=false;};
-Settings settings;NoteCapture::Policy policy;
+
 
 void* externalAlloc(size_t n){void* p=heap_caps_malloc(n,MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT);return p?p:heap_caps_malloc(n,MALLOC_CAP_8BIT);}
 void externalFree(void* p){heap_caps_free(p);}
@@ -427,6 +429,14 @@ void setup(){
  cJSON_Hooks hooks={externalAlloc,externalFree};cJSON_InitHooks(&hooks);
  prefs.begin("not-camera",false);
  settings.ssid=prefs.getString("ssid","");settings.password=prefs.getString("password","");settings.token=prefs.getString("token","");
+ // Migrate the renamed hotspot once; the existing password and API settings stay in NVS.
+ if(!prefs.getBool("zhg009-moved",false)){
+  String previous=settings.ssid;previous.toLowerCase();
+  if(previous.startsWith("haydar iphone")&&settings.password.length()>=8){
+   if(prefs.putString("ssid","zhg009")>0){settings.ssid="zhg009";prefs.putBool("zhg009-moved",true);}
+  }
+ }
+
  settings.course=prefs.getString("course","Makroökonomie");settings.rules=prefs.getString("rules","");settings.limits.interval=prefs.getUInt("interval",15000);
  settings.limits.edgeMin=prefs.getFloat("edge",2);settings.limits.duplicateMax=prefs.getFloat("duplicate",8);settings.automatic=prefs.getBool("automatic",false);hmirror=prefs.getBool("hmirror",true);vflip=prefs.getBool("vflip",false);
  // Only a device that never ran 0.1.1+ is switched off once; later updates keep the user's choice.

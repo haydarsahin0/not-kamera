@@ -1,6 +1,6 @@
-## 0.2.0 — shoot from NotEkran's PWR key
+## 0.2.1 — shoot from NotEkran's PWR key
 
-- NotEkran 0.10.3: holding PWR for 1.2 s broadcasts a UDP request (port 47123) on the shared hotspot with a hash of the shared app access code. The camera takes three full-size frames, uploads the sharpest at once and acknowledges to NotEkran (port 47124); the answer reaches NotEkran through the cloud as before. NotEkran says when the camera is not reached.
+- NotEkran 0.10.4: holding PWR for 1.2 s broadcasts a UDP request (port 47123) on the shared hotspot with a hash of the shared app access code. The camera takes three full-size frames, uploads the sharpest at once and acknowledges to NotEkran (port 47124); the answer reaches NotEkran through the cloud as before. NotEkran says when the camera is not reached.
 - A new shot (page, BOOT key or NotEkran) replaces a photo still waiting for upload, its answer or NotEkran's display; 0.1.9 silently ignored the press while such a photo was pending, so “Fotoğraf çekiliyor…” never finished. The setup page now shows the camera's state while it waits.
 
 ## 0.1.9 — manual shoot / send
@@ -54,13 +54,13 @@
 - USB opens with DTR asserted/RTS released and retries one timed-out status query. Test button requests one local frame, without uploading it.
 - Real board temperature, USB recovery, sensor restart/image quality still require physical tests. If the device overheats while capture is paused, disconnect it and check hardware; software cannot certify it safe.
 
-# NotCamera 0.2.0 — ilk deneme sürümü
+# NotCamera 0.2.1 — ilk deneme sürümü
 
 Seeed Studio XIAO ESP32-S3 **Sense**, 8 MB Flash ve 8 MB PSRAM için hazırlanmıştır. Sensörün en büyük JPEG boyutunu kullanır: OV2640 1600×1200, OV3660 2048×1536, OV5640 2592×1944. Düz XIAO, ESP32-C3 ve Waveshare NotEkran için değildir. Kamera modülü ve üreticinin Wi-Fi anteni takılı olmalıdır.
 
 ## Yükleme
 
-Windows Chrome/Edge'de `https://haydarsahin0.github.io/not-kamera/camera-install/?v=0.2.0` adresini aç. Kamera kartını veri aktarabilen USB-C kabloyla bağla. İlk bölümde kamera yazılımını yükle. NotEkran'a bu dosyayı yükleme.
+Windows Chrome/Edge'de `https://haydarsahin0.github.io/not-kamera/camera-install/?v=0.2.1` adresini aç. Kamera kartını veri aktarabilen USB-C kabloyla bağla. İlk bölümde kamera yazılımını yükle. NotEkran'a bu dosyayı yükleme.
 
 Yükleyicinin seri konsolunu kapat. Gerekirse kameranın RESET tuşuna bir kez bas. İkinci bölümde USB bağlantısını seçip kamera bilgilerini oku. Hotspot adını/şifresini ve NotEkran'da zaten kullandığın **uygulama erişim kodunu** bir kez kaydet. OpenAI API anahtarını buraya girme. Kurulum bilgileri herkese açık siteye veya GitHub'a gönderilmez; tarayıcıdan USB üzerinden kameraya yazılır.
 
@@ -87,3 +87,12 @@ NotEkran yazılımı ve mevcut sunucu bu sürümde değiştirilmez. Sunucu ders/
 ## Kaynaktan derleme
 
 Arduino ESP32 çekirdeği 3.3.0 gerekir. `python firmware/tools/build_camera.py` ayrı kamera dosyalarını oluşturur. `firmware/tests/test_capture.cpp` görüntü seçimi/bekleme/tekrar davranışlarını bilgisayarda sınar. PSRAM ve kamera modülü eksikse yazılım otomatik gönderime başlamaz.
+
+### Hotspot rename update (NotEkran 0.10.4 / NotCamera 0.2.1)
+
+On the first boot, the existing Haydar iPhone hotspot name changes to `zhg009`.
+The saved password is reused. Tokens, answer history and camera settings remain.
+The migration applies only to the known old name with an existing password and
+runs once; later manual network changes are respected. Other networks are not
+replaced. No Wi-Fi password is embedded in the public firmware source. Install
+both updates over USB without erasing stored settings, then enable the hotspot.
