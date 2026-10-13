@@ -82,3 +82,10 @@ justification uses at most two, usually 15–35 words per subtask. Listing tasks
 return only the requested terms. Unrequested definitions, model overviews and
 curve descriptions are omitted. Explicit complex discussions/derivations remain
 complete; this is a generation instruction, not unsafe post-generation truncation.
+
+Final output compaction: one calculation method and one compact equation chain
+per requested value. No alternate/checking method, repeated result, or redundant
+calculation headings. Interpretation appears only when requested, normally as
+one short sentence. Drawing-only answers may have empty text; essential legends
+and explicitly requested explanations remain. Original complete-answer and
+validation rules still apply; generated text is never blindly truncated.

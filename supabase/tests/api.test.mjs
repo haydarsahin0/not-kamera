@@ -172,7 +172,7 @@ test('model request uses high reasoning and the direction/sign self-check',async
  const {modelRequest,VERIFY_INSTRUCTIONS,REASONING_EFFORT}=await import('../functions/not-kamera-api/index.ts');
  const request=modelRequest({course:'Makroökonomie',rules:''},{mime:'image/jpeg',image_base64:'AA=='});
  assert.equal(REASONING_EFFORT,'high');assert.deepEqual(request.reasoning,{effort:'high'});
- assert(request.instructions.endsWith(VERIFY_INSTRUCTIONS));
+ assert(request.instructions.includes(VERIFY_INSTRUCTIONS));
  for(const word of ['Verteilungs','Verschärfung','über vs. unter','Phillipskurve'])assert(VERIFY_INSTRUCTIONS.includes(word),word);
 });
 
