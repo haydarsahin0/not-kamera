@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {createHandler,parseProfile,validateImage,MODEL} from '../functions/not-kamera-api/index.ts';
 const token='a'.repeat(48),tokenHash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token)))].map(x=>x.toString(16).padStart(2,'0')).join('');
 const jobId='12345678-1234-4321-1234-123456789012';
-function setup({incomplete=false,answer='Aufgabe 1)\n2 + 2 = 4',previous=[],decision={decision:'independent',used_pages:[]},claim={},databaseError=null,answers=null,firstTimeout=false}={}){
+function setup({incomplete=false,answer='Aufgabe 1)\n2 + 2 = 4',previous=[],decision={decision:'independent',used_pages:[]},claim={},databaseError=null,answers=null,firstTimeout=false,reviewFailure=false}={}){
  const jobs=[],tasks=[],calls=[],device={id:1};let modelCalls=0;
  const fetcher=async(url,opts={})=>{
   if(url.endsWith('/chat/completions')){
@@ -18,7 +18,7 @@ function setup({incomplete=false,answer='Aufgabe 1)\n2 + 2 = 4',previous=[],deci
   if(url.includes('not_kamera_device')){const q=new URL(url).searchParams;if(q.has('delivery_id')&&q.get('delivery_id')!=='eq.'+device.delivery_id)return Response.json([]);if(opts.method==='PATCH')Object.assign(device,JSON.parse(opts.body));return Response.json([device]);}
   if(url.includes('not_kamera_jobs')&&opts.method==='PATCH'){Object.assign(jobs[0],JSON.parse(opts.body));return Response.json(jobs);}
   if(url.includes('not_kamera_jobs'))return Response.json(jobs);
-  if(url.endsWith('/chat/completions')){if(firstTimeout&&modelCalls++===0)throw new DOMException('Timed out','TimeoutError');const answerValue=answers?answers[Math.min(modelCalls++,answers.length-1)]:answer;const p=JSON.parse(opts.body);assert.equal(p.model,'deepseek-flash');assert.equal(p.store,false);assert.match(p.instructions,/Aufgabe 1\)/);assert.match(p.instructions,/so kurz wie möglich und so ausführlich wie nötig/);assert.match(p.instructions,/Erkläre die Bedeutung des Ergebnisses nur, wenn gefragt oder fachlich nötig/);assert.match(p.instructions,/Jede Teilaufgabe erhält ihre eigene vollständige/);assert.match(p.input[0].content[0].text,/Statistik/);assert.equal(p.text.verbosity,'low');assert.match(p.instructions,/LÄNGENREGEL FÜR JEDE TEILAUFGABE/);assert.match(p.instructions,/kompakten Gleichungskette/);assert.match(p.instructions,/ausdrücklich verlangte Herleitungen/);assert.equal(p.text.format.type,'json_schema');assert.equal(p.text.format.strict,true);assert.match(p.instructions,/liefere tatsächlich mindestens ein graphs-Objekt/);return Response.json({choices:[{finish_reason:incomplete?'length':'stop',message:{content:JSON.stringify({context:decision,answer:typeof answerValue==='string'?{format:'not-ekran-answer-v1',sections:[{task:'Aufgabe 1)',text:answerValue.replace(/^Aufgabe 1\)\n/,''),graphs:[]}]}:answerValue})}}]});}
+  if(url.endsWith('/chat/completions')){if(reviewFailure&&jobs[0]&&calls.filter(c=>c.url.endsWith('/chat/completions')).length===2)throw new DOMException('Timed out','TimeoutError');if(firstTimeout&&modelCalls++===0)throw new DOMException('Timed out','TimeoutError');const answerValue=answers?answers[Math.min(modelCalls++,answers.length-1)]:answer;const p=JSON.parse(opts.body);assert.equal(p.model,'deepseek-flash');assert.equal(p.store,false);assert.match(p.instructions,/Aufgabe 1\)/);assert.match(p.instructions,/so kurz wie möglich und so ausführlich wie nötig/);assert.match(p.instructions,/Erkläre die Bedeutung des Ergebnisses nur, wenn gefragt oder fachlich nötig/);assert.match(p.instructions,/Jede Teilaufgabe erhält ihre eigene vollständige/);assert.match(p.input[0].content[0].text,/Statistik/);assert.equal(p.text.verbosity,'low');assert.match(p.instructions,/LÄNGENREGEL FÜR JEDE TEILAUFGABE/);assert.match(p.instructions,/kompakten Gleichungskette/);assert.match(p.instructions,/ausdrücklich verlangte Herleitungen/);assert.equal(p.text.format.type,'json_schema');assert.equal(p.text.format.strict,true);assert.match(p.instructions,/liefere tatsächlich mindestens ein graphs-Objekt/);return Response.json({choices:[{finish_reason:incomplete?'length':'stop',message:{content:JSON.stringify({context:decision,answer:typeof answerValue==='string'?{format:'not-ekran-answer-v1',sections:[{task:'Aufgabe 1)',text:answerValue.replace(/^Aufgabe 1\)\n/,''),graphs:[]}]}:answerValue})}}]});}
   throw Error('Unexpected '+url);
  };
  const env=name=>({SUPABASE_URL:'https://project.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'private-service','deepseek':'private-deepseek'})[name];
@@ -202,4 +202,13 @@ test('genuinely unreadable data remains uncertain after the bounded review',asyn
  assert.equal(calls.length,2);assert.deepEqual(calls[0].input,calls[1].input);
  assert.equal(calls[0].reasoning.effort,'high');assert.equal(calls[1].reasoning.effort,'medium');
  assert.doesNotMatch(calls[1].instructions,/DARSTELLUNGSREPARATUR/);assert.equal(s.jobs[0].status,'done');
+ });
+
+ test('blur and contrast claims trigger one review; a failed review keeps the honest partial answer',async()=>{
+ const {needsEvidenceReview}=await import('../functions/not-kamera-api/index.ts');
+ for(const text of ['Das Foto ist unscharf.','Der Kontrast ist zu hoch.','Die Seite ist überbelichtet.'])assert(needsEvidenceReview({answer:{sections:[{text}]}}));
+ const s=setup({answers:['Der Wert von c ist nicht lesbar.'],reviewFailure:true});
+ await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png','X-Study-Profile':btoa('{"course":"Statistik"}')}}));await Promise.all(s.tasks);
+ assert.equal(s.jobs[0].status,'done');assert.match(s.jobs[0].answer,/nicht lesbar/);
+ const calls=s.calls.filter(c=>c.url.endsWith('/chat/completions'));assert.equal(calls.length,2);assert.equal(JSON.parse(calls[1].opts.body).reasoning.effort,'high');
  });

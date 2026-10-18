@@ -18,11 +18,13 @@ export const EVIDENCE_INSTRUCTIONS = `AUFGABENTEXT, MODELLWISSEN UND ABBILDUNGEN
 Ein genanntes Modell ist keine fehlende Abbildung. Löse qualitative Theoriefragen aus dem lesbaren Arbeitsauftrag und dem fachlichen Modellwissen; dafür sind weder eine vorgegebene Grafik noch Zahlenwerte nötig. Leere Antwortlinien sind kein fehlendes Diagramm. Eine selbst zu zeichnende Grafik ist ein Ergebnis, keine vorausgesetzte Bildquelle. Nur wenn die Aufgabe ausdrücklich Daten aus einer bestimmten Abbildung/Tabelle verlangt, müssen diese dort ablesbar sein.
 Lies pro Teilaufgabe Modellvariante, Intervention, Richtung und konstant gehaltene Größen aus dem Text. Wörter wie steigt, sinkt, Senkung, unverändert oder reagiert nicht sind bereits Angaben. Prüfe vor jeder Meldung „nicht lesbar“ die betreffende Textzeile erneut; verwechsle keine theoretisch herzuleitende Wirkung mit einer fehlenden Angabe. Fachwissen ist zulässig, erfundene Beobachtungen oder Zahlen sind es nicht.
 Modellvarianten haben Vorrang vor allgemeinen Beispielen: Bei Zinssteuerung ist der von der Zentralbank fixierte Zins konstant; nicht ungeprüft eine steigende LM-Kurve unterstellen. Leitzins und um eine Risikoprämie erhöhter Kreditzins sind verschiedene Größen. Leite Investitions- und Produktionswirkungen aus der tatsächlich geltenden Variante ab. Diese Regeln sind keine vorgefertigten Antworten; Richtung und Annahmen jeder Aufgabe neu prüfen.
-Bei eigenständigen Aufgaben bedeutet „ausschließlich deren Angaben“: keine fremden Aufgabendaten übernehmen, aber fachliches Modellwissen zur Herleitung nutzen. Fehlende genaue Zahlen verhindern keine qualitative Antwort. Wirklich unlesbare oder notwendige fehlende Angaben weiterhin konkret benennen; keine Richtung raten. Beantworte die davon unabhängigen Teile trotzdem. graphs bleibt bei reinen Erklärungsfragen leer.`;
-export const EVIDENCE_REVIEW = `LESBARKEITSPRÜFUNG: Prüfe dieselben Originalbilder erneut, besonders die aktuelle Aufgabenzeile. Unterscheide tatsächlich fehlende/unlesbare Angaben von einer aus Text und Modellwissen herzuleitenden Wirkung. Eine bloße Modellnennung verlangt keine vorhandene Grafik. Liefere die gesamte aktuelle Seite erneut im selben Schema. Wenn die notwendige Angabe wirklich fehlt oder unlesbar bleibt, benenne sie weiterhin ehrlich und konkret; keine erzwungene Lösung und keine erfundenen Werte. Übernimm keine Vermutung aus einer vorherigen Antwort.`;
+Bei eigenständigen Aufgaben bedeutet „ausschließlich deren Angaben“: keine fremden Aufgabendaten übernehmen, aber fachliches Modellwissen zur Herleitung nutzen. Fehlende genaue Zahlen verhindern keine qualitative Antwort. Wirklich unlesbare oder notwendige fehlende Angaben weiterhin konkret benennen; keine Richtung raten. Beantworte die davon unabhängigen Teile trotzdem. graphs bleibt bei reinen Erklärungsfragen leer.
+LESBARKEIT PRO ANGABE: Prüfe jede Teilaufgabe getrennt. Ein Schatten, hoher Kontrast, schiefer Rand oder eine unscharfe Stelle bedeutet nicht, dass die ganze Seite unlesbar ist. Lies zuerst Aufgabenüberschrift, dann jede Zeile und die zugehörigen Formeln/Tabellen. Beurteile nur, ob die tatsächlich benötigten Zeichen erkennbar sind. Vergleiche wiederholte Angaben auf derselben Seite und eindeutig zugehörigen früheren Originalseiten; fremde Aufgabenwerte niemals übernehmen.
+Bei ähnlichen Zeichen (0/O, 1/l, Minus/Strich, Dezimalkomma, Exponent/Index) prüfe die konkrete Stelle nochmals. Plausibilität oder eine erwartete Lösung sind kein Beleg für ein Zeichen. Wenn eine Angabe unklar bleibt, nenne nur diese Angabe mit der Teilaufgabe, z.B. „Aufgabe b): Der Wert von c ist nicht eindeutig lesbar.“ Keine pauschalen Kameradiagnosen wie „Kontrast zu hoch“ und keine lange Aufforderung zum Neufotografieren. Löse alle davon unabhängigen Teilaufgaben vollständig. Ein fehlender Zahlenwert darf eine mögliche qualitative oder symbolische Lösung nicht verhindern, sofern der Arbeitsauftrag das zulässt; eine symbolische Lösung nicht als berechneten Zahlenwert ausgeben.`;
+export const EVIDENCE_REVIEW = `LESBARKEITSPRÜFUNG: Prüfe dieselben Originalbilder erneut, besonders die aktuelle Aufgabenzeile. Lies zuerst die einzelnen Zeichen, Zahlen, Vorzeichen und Indizes, danach löse die Aufgabe. Prüfe jede Teilaufgabe separat; eine schlechte Stelle sperrt nicht die ganze Seite. Nutze nur sichtbare Angaben und eindeutig zugehörige frühere Originalseiten. Schatten, hoher Kontrast oder schiefe Aufnahme allein sind kein Grund zur Ablehnung. Unterscheide tatsächlich fehlende/unlesbare Angaben von einer aus Text und Modellwissen herzuleitenden Wirkung. Eine bloße Modellnennung verlangt keine vorhandene Grafik. Liefere die gesamte aktuelle Seite erneut im selben Schema. Wenn die notwendige Angabe wirklich fehlt oder unlesbar bleibt, benenne sie weiterhin ehrlich und konkret; keine erzwungene Lösung und keine erfundenen Werte. Übernimm keine Vermutung aus einer vorherigen Antwort.`;
 export function needsEvidenceReview(parsed) {
  if(parsed.context?.decision==='missing_context')return true;
- return (parsed.answer?.sections||[]).some(s=>/\b(?:unlesbar|nicht\s+(?:eindeutig\s+|sicher\s+|klar\s+)?(?:lesbar|erkennbar|ablesbar)|(?:angaben?|daten|werte?|grafik|abbildung|diagramm|kontext)\s+(?:fehlt|fehlen))\b/iu.test(s.text||''));
+ return (parsed.answer?.sections||[]).some(s=>/(?<![\p{L}\p{N}])(?:unlesbar|unscharf|verschwommen|überbelichtet|unterbelichtet|zu\s+(?:unscharf|dunkel|hell)|kontrast\s+(?:ist\s+)?(?:zu\s+)?hoch|nicht\s+(?:eindeutig\s+|sicher\s+|klar\s+)?(?:lesbar|erkennbar|ablesbar)|(?:angaben?|daten|werte?|grafik|abbildung|diagramm|kontext)\s+(?:fehlt|fehlen))(?![\p{L}\p{N}])/iu.test(s.text||''));
 }
 export const VERIFY_INSTRUCTIONS = `KONTROLLE VOR DER AUSGABE (intern durchführen, nicht ausgeben):
 1. Lies jede Aufgabenstellung erneut Wort für Wort. Prüfe die Schlüsselbegriffe, die Perspektive oder Richtung festlegen, z. B. Verteilungs- vs. Verwendungs- vs. Entstehungsrechnung, Verschärfung vs. Lockerung, Anstieg vs. Rückgang, über vs. unter, nominal vs. real, kurz- vs. mittelfristig, Angebot vs. Nachfrage. Beantworte genau die gefragte Variante, nicht ihr Gegenteil.
@@ -127,7 +129,7 @@ export function createHandler({env,fetcher=fetch,waitUntil}) {
     // Reserve time for a bounded recovery. A formatting retry must see the
     // rejected document, not solve seven original pages again from scratch.
     if(attempt){
-     request.reasoning={effort:'medium'};
+     request.reasoning={effort:evidenceReview?'high':'medium'};
      if(repairAnswer&&!evidenceReview)request.input.push(
       {role:'assistant',content:[{type:'output_text',text:repairAnswer}]},
       {role:'user',content:[{type:'input_text',text:'Korrigiere die oben zurückgewiesene Antwort. Fehlercode: '+reason+'. Bewahre fachliche Inhalte, alle aktuellen Teilaufgaben und den korrekten Bezug auf frühere Seiten. Gib das vollständige JSON zurück. Frühere Seiten werden 1-basiert nummeriert; die aktuelle Seite gehört nie in used_pages.'}]}
@@ -137,24 +139,26 @@ export function createHandler({env,fetcher=fetch,waitUntil}) {
     else if(attempt&&repairAnswer)request.instructions+='\nDARSTELLUNGSREPARATUR: Korrigiere gezielt den gemeldeten Fehler in der mitgegebenen Antwort ('+reason+'). Keine neue Herleitung unveränderter Teile. Behalte erforderliche Grafiken, alle Teilaufgaben und fachlich korrekte Werte bei. Normierte Koordinaten 0..100, höchstens 3 Kurven/Markierungen/Pfeile/Ticks je Diagramm, 2..24 Kurvenpunkte. Kurvenanker auf die eigene Kurve. Kurze eindeutige Labels mit vollständiger Legende in text. Bei zu vielen Kurven/Punkten oder dichten Ticks mehrere Diagramme mit identischem Maßstab verwenden. Keine erfundenen Werte, keine abgeschnittenen Teile, kein Text anstelle einer verlangten Zeichnung.';
     let r;
     try{r=await fetcher(DEEPSEEK_BASE+'/chat/completions',{method:'POST',headers:{'Authorization':'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify(deepseekRequest(request)),signal:AbortSignal.timeout(Math.min(attempt?remaining:95000,remaining))});}
-    catch(e){if(!attempt&&(e.name==='TimeoutError'||e.name==='AbortError')){reason='analysis_timeout';continue;}throw e;}
+    catch(e){if(evidenceReview&&document)break;if(!attempt&&(e.name==='TimeoutError'||e.name==='AbortError')){reason='analysis_timeout';continue;}throw e;}
     if(!r.ok){
+     if(evidenceReview&&document)break;
      let detail='';
      if(r.status===400||r.status===429){try{const failure=await r.json();const message=failure.error?.message;if(typeof message==='string')detail=' '+message.split(key).join('[redacted]').replace(/[\r\n]+/g,' ').slice(0,400);}catch{}}
      throw new ApiError(r.status,'DeepSeek analizi başarısız (HTTP '+r.status+').'+detail);
     }
     const data=await r.json();
-    let answer;try{answer=deepseekAnswer(data);}catch(e){throw new ApiError(502,e.message);}
+    let answer;try{answer=deepseekAnswer(data);}catch(e){if(evidenceReview&&document)break;throw new ApiError(502,e.message);}
     if(!answer)throw new ApiError(502,'DeepSeek okunabilir metin döndürmedi.');
     if(new TextEncoder().encode(answer).length>MAX_ANSWER_BYTES)throw new ApiError(502,'Cevap ekran kapasitesini aştı. Soruları daha küçük gruplar halinde gönder; metin kesilmedi.');
     try{
-     const parsed=JSON.parse(answer);context=contextDecision(parsed.context,previous.length);document=prepareDocument(parsed.answer);
+     const parsed=JSON.parse(answer);const nextContext=contextDecision(parsed.context,previous.length),nextDocument=prepareDocument(parsed.answer);context=nextContext;document=nextDocument;
      if(!attempt&&needsEvidenceReview(parsed)){evidenceReview=true;continue;}
      break;
     }catch(e){
      // Bounded reason codes only. Never echo generated content into logs/errors.
      reason=typeof e.message==='string'?e.message.match(/\(([a-z0-9_]+)\)/)?.[1]||'structure':'structure';
      repairAnswer=answer;
+     if(attempt&&evidenceReview&&document)break;
      if(attempt)throw new ApiError(502,'Grafik düzeni otomatik düzeltilemedi ('+reason+'). Eksik cevap cihaza gönderilmedi; fotoğrafı tekrar gönder.');
     }
    }
