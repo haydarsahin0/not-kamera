@@ -4,24 +4,24 @@ const jobId='12345678-1234-4321-1234-123456789012';
 function setup({incomplete=false,answer='Aufgabe 1)\n2 + 2 = 4',previous=[],decision={decision:'independent',used_pages:[]},claim={},databaseError=null,answers=null,firstTimeout=false}={}){
  const jobs=[],tasks=[],calls=[],device={id:1};let modelCalls=0;
  const fetcher=async(url,opts={})=>{
-  if(url.endsWith(':generateContent')){
+  if(url.endsWith('/chat/completions')){
    const raw=JSON.parse(opts.body);
-   assert.equal(opts.headers['x-goog-api-key'],'private-gemini');
-   assert.equal(raw.generationConfig.responseFormat.text.mimeType,'APPLICATION_JSON');
-   const normalized={model:MODEL,store:false,instructions:raw.systemInstruction.parts[0].text,reasoning:{effort:raw.generationConfig.thinkingConfig.thinkingLevel.toLowerCase()},text:{verbosity:'low',format:{type:'json_schema',strict:true,schema:raw.generationConfig.responseFormat.text.schema}},input:raw.contents.map(m=>({role:m.role==='model'?'assistant':'user',content:m.parts.map(p=>p.inlineData?{type:'input_image',image_url:'data:'+p.inlineData.mimeType+';base64,'+p.inlineData.data,detail:'high'}:{type:m.role==='model'?'output_text':'input_text',text:p.text})}))};
+   assert.equal(opts.headers.Authorization,'Bearer private-deepseek');
+   assert.equal(raw.response_format.type,'json_object');
+   const normalized={model:raw.model,store:false,instructions:raw.messages[0].content,reasoning:{effort:raw.reasoning_effort==='low'?'medium':'high'},text:{verbosity:'low',format:{type:'json_schema',strict:true}},input:raw.messages.slice(1).map(m=>({role:m.role,content:typeof m.content==='string'?[{type:'output_text',text:m.content}]:m.content.map(p=>p.type==='image_url'?{type:'input_image',image_url:p.image_url.url,detail:'high'}:{type:'input_text',text:p.text})}))};
    opts={...opts,body:JSON.stringify(normalized)};
   }
   calls.push({url,opts});
   if(url.includes('not_kamera_access'))return Response.json([{token_hash:tokenHash}]);
-  if(url.endsWith('/models/'+MODEL))return Response.json({id:MODEL});
+  if(url.endsWith('/models'))return Response.json({data:[{id:MODEL}]});
   if(url.endsWith('/rpc/not_kamera_claim_frame')){if(databaseError)return Response.json(databaseError,{status:400});jobs.push({id:jobId,status:'processing',created:new Date().toISOString(),answer:'',error:''});return Response.json({id:jobId,previous,context_pages:previous.length,...claim});}
   if(url.includes('not_kamera_device')){const q=new URL(url).searchParams;if(q.has('delivery_id')&&q.get('delivery_id')!=='eq.'+device.delivery_id)return Response.json([]);if(opts.method==='PATCH')Object.assign(device,JSON.parse(opts.body));return Response.json([device]);}
   if(url.includes('not_kamera_jobs')&&opts.method==='PATCH'){Object.assign(jobs[0],JSON.parse(opts.body));return Response.json(jobs);}
   if(url.includes('not_kamera_jobs'))return Response.json(jobs);
-  if(url.endsWith(':generateContent')){if(firstTimeout&&modelCalls++===0)throw new DOMException('Timed out','TimeoutError');const answerValue=answers?answers[Math.min(modelCalls++,answers.length-1)]:answer;const p=JSON.parse(opts.body);assert.equal(p.model,'gemini-4-argon');assert.equal(p.store,false);assert.match(p.instructions,/Aufgabe 1\)/);assert.match(p.instructions,/so kurz wie möglich und so ausführlich wie nötig/);assert.match(p.instructions,/Erkläre die Bedeutung des Ergebnisses nur, wenn gefragt oder fachlich nötig/);assert.match(p.instructions,/Jede Teilaufgabe erhält ihre eigene vollständige/);assert.match(p.input[0].content[0].text,/Statistik/);assert.equal(p.text.verbosity,'low');assert.match(p.instructions,/LÄNGENREGEL FÜR JEDE TEILAUFGABE/);assert.match(p.instructions,/kompakten Gleichungskette/);assert.match(p.instructions,/ausdrücklich verlangte Herleitungen/);assert.equal(p.text.format.type,'json_schema');assert.equal(p.text.format.strict,true);assert.match(p.instructions,/liefere tatsächlich mindestens ein graphs-Objekt/);return Response.json({candidates:[{finishReason:incomplete?'MAX_TOKENS':'STOP',content:{parts:[{text:JSON.stringify({context:decision,answer:typeof answerValue==='string'?{format:'not-ekran-answer-v1',sections:[{task:'Aufgabe 1)',text:answerValue.replace(/^Aufgabe 1\)\n/,''),graphs:[]}]}:answerValue})}]}}]});}
+  if(url.endsWith('/chat/completions')){if(firstTimeout&&modelCalls++===0)throw new DOMException('Timed out','TimeoutError');const answerValue=answers?answers[Math.min(modelCalls++,answers.length-1)]:answer;const p=JSON.parse(opts.body);assert.equal(p.model,'deepseek-flash');assert.equal(p.store,false);assert.match(p.instructions,/Aufgabe 1\)/);assert.match(p.instructions,/so kurz wie möglich und so ausführlich wie nötig/);assert.match(p.instructions,/Erkläre die Bedeutung des Ergebnisses nur, wenn gefragt oder fachlich nötig/);assert.match(p.instructions,/Jede Teilaufgabe erhält ihre eigene vollständige/);assert.match(p.input[0].content[0].text,/Statistik/);assert.equal(p.text.verbosity,'low');assert.match(p.instructions,/LÄNGENREGEL FÜR JEDE TEILAUFGABE/);assert.match(p.instructions,/kompakten Gleichungskette/);assert.match(p.instructions,/ausdrücklich verlangte Herleitungen/);assert.equal(p.text.format.type,'json_schema');assert.equal(p.text.format.strict,true);assert.match(p.instructions,/liefere tatsächlich mindestens ein graphs-Objekt/);return Response.json({choices:[{finish_reason:incomplete?'length':'stop',message:{content:JSON.stringify({context:decision,answer:typeof answerValue==='string'?{format:'not-ekran-answer-v1',sections:[{task:'Aufgabe 1)',text:answerValue.replace(/^Aufgabe 1\)\n/,''),graphs:[]}]}:answerValue})}}]});}
   throw Error('Unexpected '+url);
  };
- const env=name=>({SUPABASE_URL:'https://project.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'private-service','gemini-key':'private-gemini'})[name];
+ const env=name=>({SUPABASE_URL:'https://project.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'private-service','deepseek':'private-deepseek'})[name];
  return {handler:createHandler({env,fetcher,waitUntil:p=>tasks.push(p)}),tasks,calls,jobs,device};
 }
 function photo(){const bytes=new Uint8Array(30);bytes.set([137,80,78,71,13,10,26,10],0);bytes.set([73,72,68,82],12);const v=new DataView(bytes.buffer);v.setUint32(16,200);v.setUint32(20,200);return bytes;}
@@ -121,7 +121,7 @@ test('original earlier photos are ordered and current page is explicitly isolate
  const s=setup({previous,answer:doc,decision:{decision:'uses_previous',used_pages:[1]}});
  const response=await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png','X-Study-Profile':btoa('{"course":"Statistik"}')}}));
  const accepted=await response.json();assert.equal(accepted.context_pages,2);assert.equal(accepted.previous,undefined);assert(!JSON.stringify(accepted).includes('b3Jp'));await Promise.all(s.tasks);
- const call=JSON.parse(s.calls.find(x=>x.url.endsWith(':generateContent')).opts.body),content=call.input[0].content;
+ const call=JSON.parse(s.calls.find(x=>x.url.endsWith('/chat/completions')).opts.body),content=call.input[0].content;
  const images=content.filter(x=>x.type==='input_image');assert.equal(images.length,3);assert.match(images[0].image_url,/b3JpZ2luYWwtMQ==$/);assert.match(images[1].image_url,/b3JpZ2luYWwtMg==$/);assert.match(content.at(-2).text,/AKTUELLE SEITE/);
  assert.match(call.instructions,/Gleiche Buchstaben/);assert.match(call.instructions,/Bei einer eigenständigen Aufgabe/);assert.match(call.instructions,/Lokale neue Angaben/);assert.match(call.instructions,/Wiederhole frühere a\/b-Lösungen nicht/);assert.match(call.instructions,/keine erfundene Zahlenlösung oder Grafik/);
  assert.equal(s.jobs[0].context_decision,'uses_previous');assert.deepEqual(s.jobs[0].context_used,[1]);assert.deepEqual(JSON.parse(s.jobs[0].answer),doc);assert(!s.jobs[0].answer.includes('used_pages'));
@@ -151,19 +151,19 @@ test('graph repair is bounded and retains current/original previous photos and c
  const bad=structuredClone(good);bad.sections[0].graphs[0].curves[0].points[0].x=-1;
  const s=setup({answers:[bad,good],previous:[{mime:'image/png',image_base64:'cHJpb3I='}],decision:{decision:'uses_previous',used_pages:[1]}});
  await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png','X-Study-Profile':btoa('{"course":"Statistik"}')}}));await Promise.all(s.tasks);
- const calls=s.calls.filter(x=>x.url.endsWith(':generateContent')).map(x=>JSON.parse(x.opts.body));assert.equal(calls.length,2);
+ const calls=s.calls.filter(x=>x.url.endsWith('/chat/completions')).map(x=>JSON.parse(x.opts.body));assert.equal(calls.length,2);
  assert.deepEqual(calls[0].input,calls[1].input.slice(0,1));assert.equal(calls[1].input[1].role,'assistant');assert.deepEqual(JSON.parse(calls[1].input[1].content[0].text).answer,bad);assert.equal(calls[1].reasoning.effort,'medium');assert.match(calls[1].instructions,/DARSTELLUNGSREPARATUR/);assert.match(calls[1].instructions,/coordinate_0_100/);
  assert.equal(s.jobs[0].status,'done');assert.equal(s.jobs[0].context_decision,'uses_previous');assert.deepEqual(s.jobs[0].context_used,[1]);
  const delivered=await s.handler(req('/api/device/poll?format=not-ekran-answer-v1'));assert.deepEqual(JSON.parse(await delivered.text()),good);assert.equal(s.device.ack_id,null);
  const failed=setup({answers:[bad,bad]});await failed.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png','X-Study-Profile':btoa('{"course":"Statistik"}')}}));await Promise.all(failed.tasks);
- assert.equal(failed.calls.filter(x=>x.url.endsWith(':generateContent')).length,2);assert.equal(failed.jobs[0].status,'error');assert.match(failed.jobs[0].error,/coordinate_0_100/);assert.equal((await failed.handler(req('/api/device/poll'))).status,204);
+ assert.equal(failed.calls.filter(x=>x.url.endsWith('/chat/completions')).length,2);assert.equal(failed.jobs[0].status,'error');assert.match(failed.jobs[0].error,/coordinate_0_100/);assert.equal((await failed.handler(req('/api/device/poll'))).status,204);
 });
 
 test('long ticks and off-curve label anchors are adapted without needing a second model call',async()=>{
  const fs=await import('node:fs/promises');const doc=JSON.parse(await fs.readFile(new URL('../../firmware/tests/graph-fixture.json',import.meta.url),'utf8'));
  const g=doc.sections[0].graphs[0];g.y_ticks=[{label:'1200',value:45},{label:'1400',value:50}];g.curves[0].label_at={x:90,y:90};
  const s=setup({answer:doc});await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png','X-Study-Profile':btoa('{"course":"Statistik"}')}}));await Promise.all(s.tasks);
- assert.equal(s.jobs[0].status,'done');assert.equal(s.calls.filter(x=>x.url.endsWith(':generateContent')).length,1);
+ assert.equal(s.jobs[0].status,'done');assert.equal(s.calls.filter(x=>x.url.endsWith('/chat/completions')).length,1);
  const result=JSON.parse(s.jobs[0].answer);assert.match(result.sections[0].text,/y1 = 1200/);assert.match(result.sections[0].text,/y2 = 1400/);
  assert.equal(result.sections[0].graphs.length,2);assert.deepEqual(result.sections[0].graphs.flatMap(x=>x.y_ticks.map(t=>t.value)),[45,50]);
  for(const graph of result.sections[0].graphs)assert.deepEqual(graph.curves.map(c=>c.points),g.curves.map(c=>c.points));
@@ -180,7 +180,7 @@ test('unreadable claim gets one original-image review before delivery, without i
  const good={format:'not-ekran-answer-v1',sections:[{task:'Aufgabe 9)',text:'Die höhere Risikoprämie verteuert Kredite. Investitionen und Produktion sinken.',graphs:[]}]};
  const s=setup({answers:['Die Richtung der Risikoprämienänderung ist nicht lesbar.',good],previous:[{mime:'image/png',image_base64:'cHJpb3I='}]});
  await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png','X-Study-Profile':btoa('{"course":"Statistik"}')}}));await Promise.all(s.tasks);
- const calls=s.calls.filter(x=>x.url.endsWith(':generateContent')).map(x=>JSON.parse(x.opts.body));
+ const calls=s.calls.filter(x=>x.url.endsWith('/chat/completions')).map(x=>JSON.parse(x.opts.body));
  assert.equal(calls.length,2);assert.deepEqual(calls[0].input,calls[1].input);
  assert.match(calls[1].instructions,/LESBARKEITSPRÜFUNG/);assert.doesNotMatch(calls[1].instructions,/DARSTELLUNGSREPARATUR/);
  assert.equal(s.jobs[0].status,'done');assert.deepEqual(JSON.parse(s.jobs[0].answer),good);
@@ -190,7 +190,7 @@ test('unreadable claim gets one original-image review before delivery, without i
 test('genuinely unreadable data remains uncertain after the bounded review',async()=>{
  const s=setup({answer:'Der Zahlenwert ist nicht lesbar.',decision:{decision:'missing_context',used_pages:[]}});
  await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png','X-Study-Profile':btoa('{"course":"Statistik"}')}}));await Promise.all(s.tasks);
- assert.equal(s.calls.filter(x=>x.url.endsWith(':generateContent')).length,2);
+ assert.equal(s.calls.filter(x=>x.url.endsWith('/chat/completions')).length,2);
  assert.equal(s.jobs[0].status,'done');assert.equal(s.jobs[0].context_decision,'missing_context');
  assert.match(JSON.parse(s.jobs[0].answer).sections[0].text,/nicht lesbar/);
 });
@@ -198,7 +198,7 @@ test('genuinely unreadable data remains uncertain after the bounded review',asyn
  test('slow initial analysis retries once with the original context and a smaller reasoning budget',async()=>{
  const s=setup({firstTimeout:true,previous:[{mime:'image/png',image_base64:'cHJpb3I='}]});
  await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png','X-Study-Profile':btoa('{"course":"Statistik"}')}}));await Promise.all(s.tasks);
- const calls=s.calls.filter(x=>x.url.endsWith(':generateContent')).map(x=>JSON.parse(x.opts.body));
+ const calls=s.calls.filter(x=>x.url.endsWith('/chat/completions')).map(x=>JSON.parse(x.opts.body));
  assert.equal(calls.length,2);assert.deepEqual(calls[0].input,calls[1].input);
  assert.equal(calls[0].reasoning.effort,'high');assert.equal(calls[1].reasoning.effort,'medium');
  assert.doesNotMatch(calls[1].instructions,/DARSTELLUNGSREPARATUR/);assert.equal(s.jobs[0].status,'done');

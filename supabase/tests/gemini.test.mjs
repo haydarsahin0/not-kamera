@@ -5,7 +5,7 @@ import {modelRequest,MODEL} from '../functions/not-kamera-api/index.ts';
 test('Gemini preserves ordered original images, strict schema and thinking level without credentials',()=>{
  const base=modelRequest({course:'Makroökonomie',rules:''},{mime:'image/jpeg',image_base64:'YQ=='},[{mime:'image/png',image_base64:'Yg=='}]);
  const request=geminiRequest(base);
- assert.equal(MODEL,'gemini-4-argon');
+ assert.equal(base.model,MODEL);
  assert.deepEqual(request.contents[0].parts.filter(x=>x.inlineData).map(x=>x.inlineData),[{mimeType:'image/png',data:'Yg=='},{mimeType:'image/jpeg',data:'YQ=='}]);
  assert.deepEqual(request.generationConfig.responseFormat.text.schema,geminiSchema(base.text.format.schema));
  assert.equal(request.generationConfig.thinkingConfig.thinkingLevel,'HIGH');
