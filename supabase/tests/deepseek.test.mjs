@@ -5,7 +5,7 @@ import {modelRequest} from '../functions/not-kamera-api/index.ts';
 test('DeepSeek carries original photos in order and the complete graph schema',()=>{
  const source=modelRequest({course:'Makroökonomie',rules:''},{mime:'image/jpeg',image_base64:'YQ=='},[{mime:'image/png',image_base64:'Yg=='}]);
  const r=deepseekRequest(source);
- assert.equal(r.model,'deepseek-flash');
+ assert.equal(r.model,source.model);
  assert.deepEqual(r.messages[1].content.filter(p=>p.type==='image_url').map(p=>p.image_url.url),['data:image/png;base64,Yg==','data:image/jpeg;base64,YQ==']);
  assert(r.messages[0].content.includes(JSON.stringify(source.text.format.schema)));
  assert.equal(r.reasoning_effort,'high');

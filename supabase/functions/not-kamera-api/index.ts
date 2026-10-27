@@ -1,9 +1,9 @@
-import {DEEPSEEK_BASE,deepseekRequest,deepseekAnswer} from './deepseek.ts';
+import {MUSE_BASE,museRequest,museAnswer} from './muse.ts';
 // Self-contained Supabase Edge Function. Secrets never enter frontend or logs.
 import {ANSWER_SCHEMA,ANSWER_FORMAT,GRAPH_INSTRUCTIONS,plainAnswer,readDocument} from './answer.ts';
 import {prepareDocument} from './graph-layout.ts';
 import {CONTEXT_INSTRUCTIONS,PAGE_ANSWER_SCHEMA,pageInput,contextDecision} from './context.ts';
-export const MODEL = 'deepseek-flash';
+export const MODEL = 'muse-wonder-1.0';
 export const MAX_ANSWER_BYTES = 65536;
 export const MAX_BYTES = 4 * 1024 * 1024;
 const LOCAL = /^http:\/\/(?:192\.168\.[0-9]{1,3}\.[0-9]{1,3}|10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|172\.(?:1[6-9]|2[0-9]|3[01])\.[0-9]{1,3}\.[0-9]{1,3})(?::[0-9]+)?$/;
@@ -88,7 +88,7 @@ function imageBase64(bytes){let binary='';for(let i=0;i<bytes.length;i+=8192)bin
 export function modelRequest(profile,current,previous=[]){return {model:MODEL,store:false,max_output_tokens:6000,reasoning:{effort:REASONING_EFFORT},instructions:STUDY_INSTRUCTIONS+'\n'+GRAPH_INSTRUCTIONS+'\n'+CONTEXT_INSTRUCTIONS+'\n'+CONCISE_INSTRUCTIONS+'\n'+EVIDENCE_INSTRUCTIONS+'\n'+VERIFY_INSTRUCTIONS+'\n'+COMPACT_INSTRUCTIONS,text:{verbosity:'low',format:{type:'json_schema',name:'page_answer',strict:true,schema:PAGE_ANSWER_SCHEMA}},input:pageInput(profile,current,previous)};}
 export function createHandler({env,fetcher=fetch,waitUntil}) {
  const project=env('SUPABASE_URL'),service=env('SUPABASE_SERVICE_ROLE_KEY');
- const key=env('deepseek');let modelCache=null;
+ const key=env('muse');let modelCache=null;
  async function rest(path,options={}) {
   const r=await fetcher(project+'/rest/v1/'+path,{...options,headers:{apikey:service,Authorization:'Bearer '+service,'Content-Type':'application/json',Prefer:'return=representation',...options.headers},signal:AbortSignal.timeout(30000)});
   if(!r.ok){
@@ -106,10 +106,10 @@ export function createHandler({env,fetcher=fetch,waitUntil}) {
   if(rows.length!==1||!constantEqual(await hash(value.slice(7)),rows[0].token_hash))throw new ApiError(401,'Uygulama erişim kodu geçersiz.');
  }
  async function modelStatus() {
-  if(!key)return {ready:false,model:MODEL,detail:'deepseek ayarı eksik.'};
+  if(!key)return {ready:false,model:MODEL,detail:'muse ayarı eksik.'};
   if(modelCache&&Date.now()-modelCache.time<60000)return modelCache.value;
-  const r=await fetcher(DEEPSEEK_BASE+'/models',{headers:{'Authorization':'Bearer '+key},signal:AbortSignal.timeout(12000)});
-  const models=r.ok?await r.json():null;const value={ready:r.ok&&Array.isArray(models?.data)&&models.data.some(m=>m.id===MODEL),model:MODEL};if(!value.ready)value.detail='DeepSeek model erişimi doğrulanamadı (HTTP '+r.status+'). API anahtarı, hesap erişimi ve kotayı kontrol et.';
+  const r=await fetcher(MUSE_BASE+'/models',{headers:{'Authorization':'Bearer '+key},signal:AbortSignal.timeout(12000)});
+  const models=r.ok?await r.json():null;const value={ready:r.ok&&Array.isArray(models?.data)&&models.data.some(m=>m.id===MODEL),model:MODEL};if(!value.ready)value.detail='Muse Wonder model erişimi doğrulanamadı (HTTP '+r.status+'). API anahtarı, hesap erişimi ve kotayı kontrol et.';
   modelCache={time:Date.now(),value};return value;
  }
  async function selectDevice(id) {
@@ -138,17 +138,17 @@ export function createHandler({env,fetcher=fetch,waitUntil}) {
     if(attempt&&evidenceReview)request.instructions+='\n'+EVIDENCE_REVIEW;
     else if(attempt&&repairAnswer)request.instructions+='\nDARSTELLUNGSREPARATUR: Korrigiere gezielt den gemeldeten Fehler in der mitgegebenen Antwort ('+reason+'). Keine neue Herleitung unveränderter Teile. Behalte erforderliche Grafiken, alle Teilaufgaben und fachlich korrekte Werte bei. Normierte Koordinaten 0..100, höchstens 3 Kurven/Markierungen/Pfeile/Ticks je Diagramm, 2..24 Kurvenpunkte. Kurvenanker auf die eigene Kurve. Kurze eindeutige Labels mit vollständiger Legende in text. Bei zu vielen Kurven/Punkten oder dichten Ticks mehrere Diagramme mit identischem Maßstab verwenden. Keine erfundenen Werte, keine abgeschnittenen Teile, kein Text anstelle einer verlangten Zeichnung.';
     let r;
-    try{r=await fetcher(DEEPSEEK_BASE+'/chat/completions',{method:'POST',headers:{'Authorization':'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify(deepseekRequest(request)),signal:AbortSignal.timeout(Math.min(attempt?remaining:95000,remaining))});}
+    try{r=await fetcher(MUSE_BASE+'/chat/completions',{method:'POST',headers:{'Authorization':'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify(museRequest(request)),signal:AbortSignal.timeout(Math.min(attempt?remaining:95000,remaining))});}
     catch(e){if(evidenceReview&&document)break;if(!attempt&&(e.name==='TimeoutError'||e.name==='AbortError')){reason='analysis_timeout';continue;}throw e;}
     if(!r.ok){
      if(evidenceReview&&document)break;
      let detail='';
      if(r.status===400||r.status===429){try{const failure=await r.json();const message=failure.error?.message;if(typeof message==='string')detail=' '+message.split(key).join('[redacted]').replace(/[\r\n]+/g,' ').slice(0,400);}catch{}}
-     throw new ApiError(r.status,'DeepSeek analizi başarısız (HTTP '+r.status+').'+detail);
+     throw new ApiError(r.status,'Muse Wonder analizi başarısız (HTTP '+r.status+').'+detail);
     }
     const data=await r.json();
-    let answer;try{answer=deepseekAnswer(data);}catch(e){if(evidenceReview&&document)break;throw new ApiError(502,e.message);}
-    if(!answer)throw new ApiError(502,'DeepSeek okunabilir metin döndürmedi.');
+    let answer;try{answer=museAnswer(data);}catch(e){if(evidenceReview&&document)break;throw new ApiError(502,e.message);}
+    if(!answer)throw new ApiError(502,'Muse Wonder okunabilir metin döndürmedi.');
     if(new TextEncoder().encode(answer).length>MAX_ANSWER_BYTES)throw new ApiError(502,'Cevap ekran kapasitesini aştı. Soruları daha küçük gruplar halinde gönder; metin kesilmedi.');
     try{
      const parsed=JSON.parse(answer);const nextContext=contextDecision(parsed.context,previous.length),nextDocument=prepareDocument(parsed.answer);context=nextContext;document=nextDocument;
@@ -229,7 +229,7 @@ export function createHandler({env,fetcher=fetch,waitUntil}) {
     const result=await rest('rpc/not_kamera_clear',{method:'POST',body:'{}'});if(result.code)throw new ApiError(result.code,result.detail);return reply(result);
    }
    if(path==='/api/frames'&&req.method==='POST') {
-    if(!key)throw new ApiError(503,'DeepSeek API anahtarı sunucuda eksik.');
+    if(!key)throw new ApiError(503,'Muse Wonder API anahtarı sunucuda eksik.');
     const type=(req.headers.get('content-type')||'').split(';')[0];if(!['image/jpeg','image/png'].includes(type))throw new ApiError(415,'JPEG veya PNG gönder.');
     const profile=parseProfile(req.headers.get('x-study-profile'));const bytes=await readImage(req,type);
     const preview=requestUrl.searchParams.get('preview')==='1';
