@@ -1,12 +1,20 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {createHandler,parseProfile,validateImage,MODEL} from '../functions/not-kamera-api/index.ts';
 const token='a'.repeat(48),tokenHash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token)))].map(x=>x.toString(16).padStart(2,'0')).join('');
 const jobId='12345678-1234-4321-1234-123456789012';
-function setup({incomplete=false,answer='Aufgabe 1)\n2 + 2 = 4',previous=[],decision={decision:'independent',used_pages:[]},claim={},databaseError=null,answers=null,firstTimeout=false,reviewFailure=false}={}){
- const jobs=[],tasks=[],calls=[],device={id:1};let modelCalls=0;
+function setup({incomplete=false,answer='Aufgabe 1)\n2 + 2 = 4',previous=[],decision={decision:'independent',used_pages:[]},claim={},databaseError=null,answers=null,firstTimeout=false,reviewFailure=false,missingCourse=false,invalidSelection=false}={}){
+ const jobs=[],tasks=[],calls=[],device={id:1};let modelCalls=0;const sourceCalls=[];
  const fetcher=async(url,opts={})=>{
+  if(url.includes('not_kamera_course_pages'))return Response.json(url.includes('id=in.')?[{id:1,file:'lecture.pdf',page:1,image_base64:'c291cmNl'}]:Array.from({length:missingCourse?262:263},(_,i)=>({id:i+1,file:'lecture.pdf',page:i+1,text:'Vorlesung Prozessanalyse'})));
+
   if(url.endsWith('/chat/completions')){
-   const raw=JSON.parse(opts.body);
-   assert.equal(opts.headers.Authorization,'Bearer private-muse');
+   const raw=JSON.parse(opts.body);assert.equal(raw.model,'gpt-6.1-terra');assert.equal(raw.reasoning_effort,'high');
+   if(raw.messages[0].content.startsWith('Wähle höchstens')){sourceCalls.push(raw);return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify({pages:invalidSelection?[999]:[1]})}}]});}
+   assert.match(raw.messages[1].content[0].text,/VORLESUNGSARCHIV/);
+   assert(raw.messages[1].content.some(p=>p.type==='image_url'&&p.image_url.url.endsWith('c291cmNl')));
+   assert.match(raw.messages[0].content,/Werte aus Vorlesungsbeispielen niemals/);
+   raw.messages.splice(1,1); // legacy assertions below inspect only question/context messages
+
+   assert.equal(opts.headers.Authorization,'Bearer private-terra');
    assert.equal(raw.response_format.type,'json_object');
    const normalized={model:raw.model,store:false,instructions:raw.messages[0].content,reasoning:{effort:raw.reasoning_effort},text:{verbosity:'low',format:{type:'json_schema',strict:true}},input:raw.messages.slice(1).map(m=>({role:m.role,content:typeof m.content==='string'?[{type:'output_text',text:m.content}]:m.content.map(p=>p.type==='image_url'?{type:'input_image',image_url:p.image_url.url,detail:'high'}:{type:'input_text',text:p.text})}))};
    opts={...opts,body:JSON.stringify(normalized)};
@@ -18,11 +26,11 @@ function setup({incomplete=false,answer='Aufgabe 1)\n2 + 2 = 4',previous=[],deci
   if(url.includes('not_kamera_device')){const q=new URL(url).searchParams;if(q.has('delivery_id')&&q.get('delivery_id')!=='eq.'+device.delivery_id)return Response.json([]);if(opts.method==='PATCH')Object.assign(device,JSON.parse(opts.body));return Response.json([device]);}
   if(url.includes('not_kamera_jobs')&&opts.method==='PATCH'){Object.assign(jobs[0],JSON.parse(opts.body));return Response.json(jobs);}
   if(url.includes('not_kamera_jobs'))return Response.json(jobs);
-  if(url.endsWith('/chat/completions')){if(reviewFailure&&jobs[0]&&calls.filter(c=>c.url.endsWith('/chat/completions')).length===2)throw new DOMException('Timed out','TimeoutError');if(firstTimeout&&modelCalls++===0)throw new DOMException('Timed out','TimeoutError');const answerValue=answers?answers[Math.min(modelCalls++,answers.length-1)]:answer;const p=JSON.parse(opts.body);assert.equal(p.model,'muse-wonder-1.0');assert.equal(p.store,false);assert.match(p.instructions,/Aufgabe 1\)/);assert.match(p.instructions,/so kurz wie möglich und so ausführlich wie nötig/);assert.match(p.instructions,/Erkläre die Bedeutung des Ergebnisses nur, wenn gefragt oder fachlich nötig/);assert.match(p.instructions,/Jede Teilaufgabe erhält ihre eigene vollständige/);assert.match(p.input[0].content[0].text,/Statistik/);assert.equal(p.text.verbosity,'low');assert.match(p.instructions,/LÄNGENREGEL FÜR JEDE TEILAUFGABE/);assert.match(p.instructions,/kompakten Gleichungskette/);assert.match(p.instructions,/ausdrücklich verlangte Herleitungen/);assert.equal(p.text.format.type,'json_schema');assert.equal(p.text.format.strict,true);assert.match(p.instructions,/liefere tatsächlich mindestens ein graphs-Objekt/);return Response.json({choices:[{finish_reason:incomplete?'length':'stop',message:{content:JSON.stringify({context:decision,answer:typeof answerValue==='string'?{format:'not-ekran-answer-v1',sections:[{task:'Aufgabe 1)',text:answerValue.replace(/^Aufgabe 1\)\n/,''),graphs:[]}]}:answerValue})}}]});}
+  if(url.endsWith('/chat/completions')){if(reviewFailure&&jobs[0]&&calls.filter(c=>c.url.endsWith('/chat/completions')).length===2)throw new DOMException('Timed out','TimeoutError');if(firstTimeout&&modelCalls++===0)throw new DOMException('Timed out','TimeoutError');const answerValue=answers?answers[Math.min(modelCalls++,answers.length-1)]:answer;const p=JSON.parse(opts.body);assert.equal(p.model,'gpt-6.1-terra');assert.equal(p.store,false);assert.match(p.instructions,/Aufgabe 1\)/);assert.match(p.instructions,/so kurz wie möglich und so ausführlich wie nötig/);assert.match(p.instructions,/Erkläre die Bedeutung des Ergebnisses nur, wenn gefragt oder fachlich nötig/);assert.match(p.instructions,/Jede Teilaufgabe erhält ihre eigene vollständige/);assert.match(p.input[0].content[0].text,/Produktion und Logistik/);assert.equal(p.text.verbosity,'low');assert.match(p.instructions,/LÄNGENREGEL FÜR JEDE TEILAUFGABE/);assert.match(p.instructions,/kompakten Gleichungskette/);assert.match(p.instructions,/ausdrücklich verlangte Herleitungen/);assert.equal(p.text.format.type,'json_schema');assert.equal(p.text.format.strict,true);assert.match(p.instructions,/liefere tatsächlich mindestens ein graphs-Objekt/);return Response.json({choices:[{finish_reason:incomplete?'length':'stop',message:{content:JSON.stringify({context:decision,answer:typeof answerValue==='string'?{format:'not-ekran-answer-v1',sections:[{task:'Aufgabe 1)',text:answerValue.replace(/^Aufgabe 1\)\n/,''),graphs:[]}]}:answerValue})}}]});}
   throw Error('Unexpected '+url);
  };
- const env=name=>({SUPABASE_URL:'https://project.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'private-service','muse':'private-muse'})[name];
- return {handler:createHandler({env,fetcher,waitUntil:p=>tasks.push(p)}),tasks,calls,jobs,device};
+ const env=name=>({SUPABASE_URL:'https://project.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'private-service','notekran_terra':'private-terra'})[name];
+ return {handler:createHandler({env,fetcher,waitUntil:p=>tasks.push(p)}),tasks,calls,jobs,device,sourceCalls};
 }
 function photo(){const bytes=new Uint8Array(30);bytes.set([137,80,78,71,13,10,26,10],0);bytes.set([73,72,68,82],12);const v=new DataView(bytes.buffer);v.setUint32(16,200);v.setUint32(20,200);return bytes;}
 function req(path,opts={}){return new Request('https://project.supabase.co/functions/v1/not-kamera-api'+path,{...opts,headers:{Authorization:'Bearer '+token,...opts.headers}})}
@@ -57,7 +65,7 @@ test('incomplete output never becomes a successful answer',async()=>{
 test('profile and image limits reject malformed input',()=>{
  assert.throws(()=>parseProfile('not-base64'));assert.throws(()=>parseProfile(btoa(JSON.stringify({course:'x'.repeat(121)}))));
  assert.throws(()=>validateImage(new Uint8Array([1,2,3]),'image/jpeg'));const b=photo();new DataView(b.buffer).setUint32(16,500000);assert.throws(()=>validateImage(b,'image/png'));
- assert.equal(parseProfile(null).course,'Makroökonomie');
+ assert.equal(parseProfile(null).course,'Produktion und Logistik');
 });
 test('database failures expose only a bounded code, never SQL/photos/secrets or a queued job',async()=>{
  const s=setup({databaseError:{code:'21000',message:'private SQL or photo details'}});
@@ -152,7 +160,7 @@ test('graph repair is bounded and retains current/original previous photos and c
  const s=setup({answers:[bad,good],previous:[{mime:'image/png',image_base64:'cHJpb3I='}],decision:{decision:'uses_previous',used_pages:[1]}});
  await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png','X-Study-Profile':btoa('{"course":"Statistik"}')}}));await Promise.all(s.tasks);
  const calls=s.calls.filter(x=>x.url.endsWith('/chat/completions')).map(x=>JSON.parse(x.opts.body));assert.equal(calls.length,2);
- assert.deepEqual(calls[0].input,calls[1].input.slice(0,1));assert.equal(calls[1].input[1].role,'assistant');assert.deepEqual(JSON.parse(calls[1].input[1].content[0].text).answer,bad);assert.equal(calls[1].reasoning.effort,'medium');assert.match(calls[1].instructions,/DARSTELLUNGSREPARATUR/);assert.match(calls[1].instructions,/coordinate_0_100/);
+ assert.deepEqual(calls[0].input,calls[1].input.slice(0,1));assert.equal(calls[1].input[1].role,'assistant');assert.deepEqual(JSON.parse(calls[1].input[1].content[0].text).answer,bad);assert.equal(calls[1].reasoning.effort,'high');assert.match(calls[1].instructions,/DARSTELLUNGSREPARATUR/);assert.match(calls[1].instructions,/coordinate_0_100/);
  assert.equal(s.jobs[0].status,'done');assert.equal(s.jobs[0].context_decision,'uses_previous');assert.deepEqual(s.jobs[0].context_used,[1]);
  const delivered=await s.handler(req('/api/device/poll?format=not-ekran-answer-v1'));assert.deepEqual(JSON.parse(await delivered.text()),good);assert.equal(s.device.ack_id,null);
  const failed=setup({answers:[bad,bad]});await failed.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png','X-Study-Profile':btoa('{"course":"Statistik"}')}}));await Promise.all(failed.tasks);
@@ -195,12 +203,12 @@ test('genuinely unreadable data remains uncertain after the bounded review',asyn
  assert.match(JSON.parse(s.jobs[0].answer).sections[0].text,/nicht lesbar/);
 });
 
- test('slow initial analysis retries once with the original context and a smaller reasoning budget',async()=>{
+ test('slow initial analysis retries once with the original context and high reasoning',async()=>{
  const s=setup({firstTimeout:true,previous:[{mime:'image/png',image_base64:'cHJpb3I='}]});
  await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png','X-Study-Profile':btoa('{"course":"Statistik"}')}}));await Promise.all(s.tasks);
  const calls=s.calls.filter(x=>x.url.endsWith('/chat/completions')).map(x=>JSON.parse(x.opts.body));
  assert.equal(calls.length,2);assert.deepEqual(calls[0].input,calls[1].input);
- assert.equal(calls[0].reasoning.effort,'high');assert.equal(calls[1].reasoning.effort,'medium');
+ assert.equal(calls[0].reasoning.effort,'high');assert.equal(calls[1].reasoning.effort,'high');
  assert.doesNotMatch(calls[1].instructions,/DARSTELLUNGSREPARATUR/);assert.equal(s.jobs[0].status,'done');
  });
 
@@ -212,3 +220,15 @@ test('genuinely unreadable data remains uncertain after the bounded review',asyn
  assert.equal(s.jobs[0].status,'done');assert.match(s.jobs[0].answer,/nicht lesbar/);
  const calls=s.calls.filter(c=>c.url.endsWith('/chat/completions'));assert.equal(calls.length,2);assert.equal(JSON.parse(calls[1].opts.body).reasoning.effort,'high');
  });
+
+test('course archive selects original visuals and records sources without polluting question context',async()=>{
+ const s=setup();await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png'}}));await Promise.all(s.tasks);
+ assert.equal(s.jobs[0].status,'done');assert.equal(s.sourceCalls.length,1);assert.equal(s.jobs[0].source_refs[0].file,'lecture.pdf');assert.equal(s.jobs[0].context_decision,'independent');
+ const info=await (await s.handler(req('/api/course'))).json();assert.equal(info.ready,true);assert.equal(info.pages,263);
+});
+test('missing course assets or invented source IDs fail closed without model solution',async()=>{
+ for(const option of [{missingCourse:true},{invalidSelection:true}]){
+  const s=setup(option);await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png'}}));await Promise.all(s.tasks);
+  assert.equal(s.jobs[0].status,'error');assert.equal(s.calls.filter(c=>c.url.endsWith('/chat/completions')).length,0);
+ }
+});
