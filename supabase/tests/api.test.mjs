@@ -1,11 +1,17 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {createHandler,parseProfile,validateImage,MODEL} from '../functions/not-kamera-api/index.ts';
 const token='a'.repeat(48),tokenHash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token)))].map(x=>x.toString(16).padStart(2,'0')).join('');
 const jobId='12345678-1234-4321-1234-123456789012';
-function setup({incomplete=false,answer='Aufgabe 1)\n2 + 2 = 4',previous=[],decision={decision:'independent',used_pages:[]},claim={},databaseError=null,answers=null,firstTimeout=false,reviewFailure=false,missingCourse=false,invalidSelection=false}={}){
- const jobs=[],tasks=[],calls=[],device={id:1};let modelCalls=0;const sourceCalls=[];
+function setup({incomplete=false,answer='Aufgabe 1)\n2 + 2 = 4',previous=[],decision={decision:'independent',used_pages:[]},claim={},databaseError=null,answers=null,firstTimeout=false,reviewFailure=false,missingCourse=false,invalidSelection=false,quotaAt=0}={}){
+ const jobs=[],tasks=[],calls=[],device={id:1};let modelCalls=0;const sourceCalls=[];let primaryCount=0,backupCount=0;
  const fetcher=async(url,opts={})=>{
   if(url.includes('not_kamera_course_pages'))return Response.json(url.includes('id=in.')?[{id:1,file:'lecture.pdf',page:1,image_base64:'c291cmNl'}]:Array.from({length:missingCourse?262:263},(_,i)=>({id:i+1,file:'lecture.pdf',page:i+1,text:'Vorlesung Prozessanalyse'})));
 
+  if(url.endsWith('/messages')){
+   backupCount++;const raw=JSON.parse(opts.body);assert.equal(raw.model,'claude-haiku-5-5');assert.equal(opts.headers['x-api-key'],'private-haiku');assert.equal(raw.output_config.effort,'high');assert(raw.messages.some(m=>Array.isArray(m.content)&&m.content.some(p=>p.type==='image')));
+   const content=raw.system.startsWith('Wähle höchstens')?{pages:[1]}:{context:{decision:'independent',used_pages:[],reference_page:false},answer:{format:'not-ekran-answer-v1',sections:[{task:'Aufgabe 1)',text:'4',graphs:[]}]}};
+   return Response.json({stop_reason:'end_turn',content:[{type:'text',text:JSON.stringify(content)}]});
+  }
+  if(url.endsWith('/chat/completions')&&++primaryCount===quotaAt)return Response.json({error:{code:'insufficient_quota'}},{status:429});
   if(url.endsWith('/chat/completions')){
    const raw=JSON.parse(opts.body);assert.equal(raw.model,'gpt-6.1-terra');assert.equal(raw.reasoning_effort,'high');
    if(raw.messages[0].content.startsWith('Wähle höchstens')){sourceCalls.push(raw);return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify({pages:invalidSelection?[999]:[1]})}}]});}
@@ -29,8 +35,8 @@ function setup({incomplete=false,answer='Aufgabe 1)\n2 + 2 = 4',previous=[],deci
   if(url.endsWith('/chat/completions')){if(reviewFailure&&jobs[0]&&calls.filter(c=>c.url.endsWith('/chat/completions')).length===2)throw new DOMException('Timed out','TimeoutError');if(firstTimeout&&modelCalls++===0)throw new DOMException('Timed out','TimeoutError');const answerValue=answers?answers[Math.min(modelCalls++,answers.length-1)]:answer;const p=JSON.parse(opts.body);assert.equal(p.model,'gpt-6.1-terra');assert.equal(p.store,false);assert.match(p.instructions,/Aufgabe 1\)/);assert.match(p.instructions,/so kurz wie möglich und so ausführlich wie nötig/);assert.match(p.instructions,/Erkläre die Bedeutung des Ergebnisses nur, wenn gefragt oder fachlich nötig/);assert.match(p.instructions,/Jede Teilaufgabe erhält ihre eigene vollständige/);assert.match(p.input[0].content[0].text,/Produktion und Logistik/);assert.equal(p.text.verbosity,'low');assert.match(p.instructions,/LÄNGENREGEL FÜR JEDE TEILAUFGABE/);assert.match(p.instructions,/kompakten Gleichungskette/);assert.match(p.instructions,/ausdrücklich verlangte Herleitungen/);assert.equal(p.text.format.type,'json_schema');assert.equal(p.text.format.strict,true);assert.match(p.instructions,/liefere tatsächlich mindestens ein graphs-Objekt/);return Response.json({choices:[{finish_reason:incomplete?'length':'stop',message:{content:JSON.stringify({context:{reference_page:false,...decision},answer:typeof answerValue==='string'?{format:'not-ekran-answer-v1',sections:[{task:'Aufgabe 1)',text:answerValue.replace(/^Aufgabe 1\)\n/,''),graphs:[]}]}:answerValue})}}]});}
   throw Error('Unexpected '+url);
  };
- const env=name=>({SUPABASE_URL:'https://project.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'private-service','notekran_terra':'private-terra'})[name];
- return {handler:createHandler({env,fetcher,waitUntil:p=>tasks.push(p)}),tasks,calls,jobs,device,sourceCalls};
+ const env=name=>({SUPABASE_URL:'https://project.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'private-service','notekran_terra':'private-terra','notekran_haiku':'private-haiku'})[name];
+ return {handler:createHandler({env,fetcher,waitUntil:p=>tasks.push(p)}),tasks,calls,jobs,device,sourceCalls,counts:()=>({primaryCount,backupCount})};
 }
 function photo(){const bytes=new Uint8Array(30);bytes.set([137,80,78,71,13,10,26,10],0);bytes.set([73,72,68,82],12);const v=new DataView(bytes.buffer);v.setUint32(16,200);v.setUint32(20,200);return bytes;}
 function req(path,opts={}){return new Request('https://project.supabase.co/functions/v1/not-kamera-api'+path,{...opts,headers:{Authorization:'Bearer '+token,...opts.headers}})}
@@ -250,4 +256,14 @@ test('saved reference remains optional; independent and dependent answers keep d
   assert(request.input[0].content.some(p=>p.text?.includes('GESPEICHERTE REFERENZ')));
   assert.match(request.instructions,/Eine unabhängige Frage bleibt unabhängig/);
  }
+});
+
+for(const quotaAt of [1,2])test('quota at stage '+quotaAt+' continues same job through Haiku without duplicate delivery',async()=>{
+ const s=setup({quotaAt});const r=await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png'}}));
+ assert.equal(r.status,202);await Promise.all(s.tasks);assert.equal(s.jobs.length,1);assert.equal(s.jobs[0].status,'done');assert.equal(JSON.parse(s.jobs[0].answer).sections[0].text,'4');assert.equal(s.device.job_id,jobId);assert.equal(s.counts().primaryCount,quotaAt);assert.equal(s.counts().backupCount,3-quotaAt);
+});
+
+test('quota during evidence review uses Haiku and finishes the original job',async()=>{
+ const s=setup({quotaAt:3,answer:'Der Wert von c ist nicht lesbar.'});await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png'}}));await Promise.all(s.tasks);
+ assert.equal(s.jobs[0].status,'done');assert.equal(JSON.parse(s.jobs[0].answer).sections[0].text,'4');assert.deepEqual(s.counts(),{primaryCount:3,backupCount:1});
 });
