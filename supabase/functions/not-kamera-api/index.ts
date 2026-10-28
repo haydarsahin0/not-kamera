@@ -176,7 +176,7 @@ export function createHandler({env,fetcher=fetch,waitUntil}) {
      if(attempt)throw new ApiError(502,'Grafik düzeni otomatik düzeltilemedi ('+reason+'). Eksik cevap cihaza gönderilmedi; fotoğrafı tekrar gönder.');
     }
    }
-   await finish(id,{status:'done',answer:document,error:'',context_decision:context.decision,context_used:context.used_pages,source_refs:sources.refs});
+   await finish(id,{status:'done',answer:document,error:'',context_decision:context.decision,context_used:context.used_pages,source_refs:sources.refs,reference_page:context.reference_page});
   } catch(e) {
    const error=e instanceof ApiError?e.message:(e.name==='TimeoutError'||e.name==='AbortError'?'Analiz zaman aşımına uğradı. Bekleyen işlemi kontrol et veya tekrar dene.':'Analiz tamamlanamadı. Bağlantıyı ve sunucu durumunu kontrol et.');
    try{await finish(id,{status:'error',answer:'',error});}catch{console.error('not-kamera: job update failed');}
@@ -230,12 +230,12 @@ export function createHandler({env,fetcher=fetch,waitUntil}) {
    }
    if(path==='/api/jobs'&&req.method==='GET') {
     await rest('not_kamera_jobs?created=lt.'+encodeURIComponent(cutoff),{method:'DELETE'});
-    const rows=await rest('not_kamera_jobs?created=gt.'+encodeURIComponent(cutoff)+'&select=id,created,status,answer,error,source_refs&order=created.desc&limit=20');
+    const rows=await rest('not_kamera_jobs?created=gt.'+encodeURIComponent(cutoff)+'&select=id,created,status,answer,error,source_refs,reference_page&order=created.desc&limit=20');
     return reply({jobs:rows.map(x=>({...x,answer:plainAnswer(x.answer),document:readDocument(x.answer),created:Date.parse(x.created)/1000}))});
    }
    if(path.startsWith('/api/jobs/')&&req.method==='GET') {
     const id=path.slice('/api/jobs/'.length);if(!/^[0-9a-f-]{36}$/.test(id))throw new ApiError(404,'İşlem bulunamadı.');
-    const rows=await rest('not_kamera_jobs?id=eq.'+id+'&created=gt.'+encodeURIComponent(cutoff)+'&select=id,created,status,answer,error,source_refs');
+    const rows=await rest('not_kamera_jobs?id=eq.'+id+'&created=gt.'+encodeURIComponent(cutoff)+'&select=id,created,status,answer,error,source_refs,reference_page');
     if(!rows.length)throw new ApiError(404,'İşlem bulunamadı veya 24 saatlik süresi doldu.');
     const job=rows[0];if(job.status==='processing'&&Date.now()-Date.parse(job.created)>180000) {await finish(id,{status:'error',answer:'',error:'Analiz zaman aşımına uğradı. Fotoğrafı tekrar gönder.'});job.status='error';job.error='Analiz zaman aşımına uğradı. Fotoğrafı tekrar gönder.';}
     return reply({...job,answer:requestUrl.searchParams.get('format')===ANSWER_FORMAT?job.answer:plainAnswer(job.answer),created:Date.parse(job.created)/1000});

@@ -30,3 +30,20 @@ are not infallible. The 200x200 display's existing graph limits still apply.
 
 Provider: OpenAI (`gpt-6.1-terra`), server secret `notekran_terra`. Both
 source selection and answering/repair use high reasoning. No provider fallback.
+
+## Conditional shared-question references
+
+The solver classifies the current question photo with `context.reference_page`.
+Only clear shared case data/instructions are candidates; ordinary independent
+questions are not pinned. The flag is stored atomically with successful completion.
+
+`shared-reference-schema.sql` preserves the latest two such original photos plus
+six recent completed photos, without duplicates (at most eight previous photos).
+A reference is only applicable if the current task clearly matches its case/block;
+local task values take precedence. Lecture pages are never question references.
+The context `used_pages` indices still refer to the ordered previous question photos.
+
+Reset, clear, profile change and two hours of inactivity release references.
+Newer reference candidates replace the oldest beyond the two-reference limit.
+This is bounded context retrieval, not guaranteed semantic matching. No firmware
+or manual pin button is required. Preview requests never alter reference state.
