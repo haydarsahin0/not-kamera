@@ -15,11 +15,7 @@ function setup({incomplete=false,answer='Aufgabe 1)\n2 + 2 = 4',previous=[],deci
   if(url.endsWith('/chat/completions')){
    const raw=JSON.parse(opts.body);assert.equal(raw.model,'gpt-6.1-terra');assert.equal(raw.reasoning_effort,'high');
    if(raw.messages[0].content.startsWith('Wähle höchstens')){sourceCalls.push(raw);return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify({pages:invalidSelection?[999]:[1]})}}]});}
-   assert.match(raw.messages[1].content[0].text,/VORLESUNGSARCHIV/);
-   assert(raw.messages[1].content.some(p=>p.type==='image_url'&&p.image_url.url.endsWith('c291cmNl')));
-   assert.match(raw.messages[0].content,/Werte aus Vorlesungsbeispielen niemals/);
-   raw.messages.splice(1,1); // legacy assertions below inspect only question/context messages
-
+   assert(!raw.messages.some(m=>JSON.stringify(m).includes('VORLESUNGSARCHIV')));
    assert.equal(opts.headers.Authorization,'Bearer private-terra');
    assert.equal(raw.response_format.type,'json_object');
    const normalized={model:raw.model,store:false,instructions:raw.messages[0].content,reasoning:{effort:raw.reasoning_effort},text:{verbosity:'low',format:{type:'json_schema',strict:true}},input:raw.messages.slice(1).map(m=>({role:m.role,content:typeof m.content==='string'?[{type:'output_text',text:m.content}]:m.content.map(p=>p.type==='image_url'?{type:'input_image',image_url:p.image_url.url,detail:'high'}:{type:'input_text',text:p.text})}))};
@@ -32,7 +28,7 @@ function setup({incomplete=false,answer='Aufgabe 1)\n2 + 2 = 4',previous=[],deci
   if(url.includes('not_kamera_device')){const q=new URL(url).searchParams;if(q.has('delivery_id')&&q.get('delivery_id')!=='eq.'+device.delivery_id)return Response.json([]);if(opts.method==='PATCH')Object.assign(device,JSON.parse(opts.body));return Response.json([device]);}
   if(url.includes('not_kamera_jobs')&&opts.method==='PATCH'){Object.assign(jobs[0],JSON.parse(opts.body));return Response.json(jobs);}
   if(url.includes('not_kamera_jobs'))return Response.json(jobs);
-  if(url.endsWith('/chat/completions')){if(reviewFailure&&jobs[0]&&calls.filter(c=>c.url.endsWith('/chat/completions')).length===2)throw new DOMException('Timed out','TimeoutError');if(firstTimeout&&modelCalls++===0)throw new DOMException('Timed out','TimeoutError');const answerValue=answers?answers[Math.min(modelCalls++,answers.length-1)]:answer;const p=JSON.parse(opts.body);assert.equal(p.model,'gpt-6.1-terra');assert.equal(p.store,false);assert.match(p.instructions,/Aufgabe 1\)/);assert.match(p.instructions,/so kurz wie möglich und so ausführlich wie nötig/);assert.match(p.instructions,/Erkläre die Bedeutung des Ergebnisses nur, wenn gefragt oder fachlich nötig/);assert.match(p.instructions,/Jede Teilaufgabe erhält ihre eigene vollständige/);assert.match(p.input[0].content[0].text,/Produktion und Logistik/);assert.equal(p.text.verbosity,'low');assert.match(p.instructions,/LÄNGENREGEL FÜR JEDE TEILAUFGABE/);assert.match(p.instructions,/kompakten Gleichungskette/);assert.match(p.instructions,/ausdrücklich verlangte Herleitungen/);assert.equal(p.text.format.type,'json_schema');assert.equal(p.text.format.strict,true);assert.match(p.instructions,/liefere tatsächlich mindestens ein graphs-Objekt/);return Response.json({choices:[{finish_reason:incomplete?'length':'stop',message:{content:JSON.stringify({context:{reference_page:false,...decision},answer:typeof answerValue==='string'?{format:'not-ekran-answer-v1',sections:[{task:'Aufgabe 1)',text:answerValue.replace(/^Aufgabe 1\)\n/,''),graphs:[]}]}:answerValue})}}]});}
+  if(url.endsWith('/chat/completions')){if(reviewFailure&&jobs[0]&&calls.filter(c=>c.url.endsWith('/chat/completions')).length===2)throw new DOMException('Timed out','TimeoutError');if(firstTimeout&&modelCalls++===0)throw new DOMException('Timed out','TimeoutError');const answerValue=answers?answers[Math.min(modelCalls++,answers.length-1)]:answer;const p=JSON.parse(opts.body);assert.equal(p.model,'gpt-6.1-terra');assert.equal(p.store,false);assert.match(p.instructions,/Aufgabe 1\)/);assert.match(p.instructions,/so kurz wie möglich und so ausführlich wie nötig/);assert.match(p.instructions,/Erkläre die Bedeutung des Ergebnisses nur, wenn gefragt oder fachlich nötig/);assert.match(p.instructions,/Jede Teilaufgabe erhält ihre eigene vollständige/);assert.match(p.input[0].content[0].text,/Unternehmensführung und Organisation/);assert.equal(p.text.verbosity,'low');assert.match(p.instructions,/LÄNGENREGEL FÜR JEDE TEILAUFGABE/);assert.match(p.instructions,/kompakten Gleichungskette/);assert.match(p.instructions,/ausdrücklich verlangte Herleitungen/i);assert.equal(p.text.format.type,'json_schema');assert.equal(p.text.format.strict,true);assert.match(p.instructions,/liefere tatsächlich mindestens ein graphs-Objekt/);return Response.json({choices:[{finish_reason:incomplete?'length':'stop',message:{content:JSON.stringify({context:{reference_page:false,...decision},answer:typeof answerValue==='string'?{format:'not-ekran-answer-v1',sections:[{task:'Aufgabe 1)',text:answerValue.replace(/^Aufgabe 1\)\n/,''),graphs:[]}]}:answerValue})}}]});}
   throw Error('Unexpected '+url);
  };
  const env=name=>({SUPABASE_URL:'https://project.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'private-service','notekran_terra':'private-terra','notekran_haiku':'private-haiku'})[name];
@@ -71,7 +67,7 @@ test('incomplete output never becomes a successful answer',async()=>{
 test('profile and image limits reject malformed input',()=>{
  assert.throws(()=>parseProfile('not-base64'));assert.throws(()=>parseProfile(btoa(JSON.stringify({course:'x'.repeat(121)}))));
  assert.throws(()=>validateImage(new Uint8Array([1,2,3]),'image/jpeg'));const b=photo();new DataView(b.buffer).setUint32(16,500000);assert.throws(()=>validateImage(b,'image/png'));
- assert.equal(parseProfile(null).course,'Produktion und Logistik');
+ assert.equal(parseProfile(null).course,'Unternehmensführung und Organisation');
 });
 test('database failures expose only a bounded code, never SQL/photos/secrets or a queued job',async()=>{
  const s=setup({databaseError:{code:'21000',message:'private SQL or photo details'}});
@@ -187,7 +183,7 @@ test('model request uses high reasoning and the direction/sign self-check',async
  const request=modelRequest({course:'Makroökonomie',rules:''},{mime:'image/jpeg',image_base64:'AA=='});
  assert.equal(REASONING_EFFORT,'high');assert.deepEqual(request.reasoning,{effort:'high'});
  assert(request.instructions.includes(VERIFY_INSTRUCTIONS));
- for(const word of ['Verteilungs','Verschärfung','über vs. unter','Phillipskurve'])assert(VERIFY_INSTRUCTIONS.includes(word),word);
+ for(const word of ['Aufbau- und Ablauforganisation','erläutern','Wie/Warum','Fallbezug'])assert(VERIFY_INSTRUCTIONS.includes(word),word);
 });
 
 test('unreadable claim gets one original-image review before delivery, without inventing a graph',async()=>{
@@ -199,7 +195,7 @@ test('unreadable claim gets one original-image review before delivery, without i
  assert.match(calls[1].instructions,/LESBARKEITSPRÜFUNG/);assert.doesNotMatch(calls[1].instructions,/DARSTELLUNGSREPARATUR/);
  assert.equal(s.jobs[0].status,'done');assert.deepEqual(JSON.parse(s.jobs[0].answer),good);
  assert.match(calls[0].instructions,/Ein genanntes Modell ist keine fehlende Abbildung/);
- assert.match(calls[0].instructions,/Zinssteuerung/);
+ assert.match(calls[0].instructions,/genannte Theorie oder Modellvariante/);
 });
 test('genuinely unreadable data remains uncertain after the bounded review',async()=>{
  const s=setup({answer:'Der Zahlenwert ist nicht lesbar.',decision:{decision:'missing_context',used_pages:[]}});
@@ -227,18 +223,12 @@ test('genuinely unreadable data remains uncertain after the bounded review',asyn
  const calls=s.calls.filter(c=>c.url.endsWith('/chat/completions'));assert.equal(calls.length,2);assert.equal(JSON.parse(calls[1].opts.body).reasoning.effort,'high');
  });
 
-test('course archive selects original visuals and records sources without polluting question context',async()=>{
- const s=setup();await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png'}}));await Promise.all(s.tasks);
- assert.equal(s.jobs[0].status,'done');assert.equal(s.sourceCalls.length,1);assert.equal(s.jobs[0].source_refs[0].file,'lecture.pdf');assert.equal(s.jobs[0].context_decision,'independent');
- const info=await (await s.handler(req('/api/course'))).json();assert.equal(info.ready,true);assert.equal(info.pages,263);
+test('new course ignores old archive and stale client course rules',async()=>{
+ const s=setup();await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png','X-Study-Profile':btoa(JSON.stringify({course:'Produktion und Logistik',rules:'OLD COURSE RULE'}))}}));await Promise.all(s.tasks);
+ assert.equal(s.jobs[0].status,'done');assert.equal(s.sourceCalls.length,0);assert.deepEqual(s.jobs[0].source_refs,[]);
+ const body=s.calls.find(c=>c.url.endsWith('/chat/completions')).opts.body;assert(!body.includes('OLD COURSE RULE'));assert(!body.includes('VORLESUNGSARCHIV'));
+ const info=await (await s.handler(req('/api/course'))).json();assert.equal(info.ready,true);assert.equal(info.pages,0);assert.equal(info.archive_enabled,false);assert.equal(info.course,'Unternehmensführung und Organisation');
 });
-test('missing course assets or invented source IDs fail closed without model solution',async()=>{
- for(const option of [{missingCourse:true},{invalidSelection:true}]){
-  const s=setup(option);await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png'}}));await Promise.all(s.tasks);
-  assert.equal(s.jobs[0].status,'error');assert.equal(s.calls.filter(c=>c.url.endsWith('/chat/completions')).length,0);
- }
-});
-
 test('reference classification is persisted with completion, without exposing metadata in screen text',async()=>{
  const s=setup({decision:{decision:'independent',used_pages:[],reference_page:true},answer:'Gemeinsame Angaben erfasst.'});
  await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png'}}));await Promise.all(s.tasks);
@@ -258,12 +248,18 @@ test('saved reference remains optional; independent and dependent answers keep d
  }
 });
 
-for(const quotaAt of [1,2])test('quota at stage '+quotaAt+' continues same job through Haiku without duplicate delivery',async()=>{
+for(const quotaAt of [1])test('quota at stage '+quotaAt+' continues same job through Haiku without duplicate delivery',async()=>{
  const s=setup({quotaAt});const r=await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png'}}));
- assert.equal(r.status,202);await Promise.all(s.tasks);assert.equal(s.jobs.length,1);assert.equal(s.jobs[0].status,'done');assert.equal(JSON.parse(s.jobs[0].answer).sections[0].text,'4');assert.equal(s.device.job_id,jobId);assert.equal(s.counts().primaryCount,quotaAt);assert.equal(s.counts().backupCount,3-quotaAt);
+ assert.equal(r.status,202);await Promise.all(s.tasks);assert.equal(s.jobs.length,1);assert.equal(s.jobs[0].status,'done');assert.equal(JSON.parse(s.jobs[0].answer).sections[0].text,'4');assert.equal(s.device.job_id,jobId);assert.equal(s.counts().primaryCount,quotaAt);assert.equal(s.counts().backupCount,2-quotaAt);
 });
 
 test('quota during evidence review uses Haiku and finishes the original job',async()=>{
- const s=setup({quotaAt:3,answer:'Der Wert von c ist nicht lesbar.'});await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png'}}));await Promise.all(s.tasks);
- assert.equal(s.jobs[0].status,'done');assert.equal(JSON.parse(s.jobs[0].answer).sections[0].text,'4');assert.deepEqual(s.counts(),{primaryCount:3,backupCount:1});
+ const s=setup({quotaAt:2,answer:'Der Wert von c ist nicht lesbar.'});await s.handler(req('/api/frames',{method:'POST',body:photo(),headers:{'Content-Type':'image/png'}}));await Promise.all(s.tasks);
+ assert.equal(s.jobs[0].status,'done');assert.equal(JSON.parse(s.jobs[0].answer).sections[0].text,'4');assert.deepEqual(s.counts(),{primaryCount:2,backupCount:1});
+});
+
+test('all answer stages use operator-specific explanation rules without sentence caps',async()=>{
+ const {modelRequest}=await import('../functions/not-kamera-api/index.ts');
+ const p=modelRequest({course:'Unternehmensführung und Organisation',rules:''},{mime:'image/png',image_base64:'YQ=='}).instructions;
+ assert.match(p,/WIE und WARUM/);assert.match(p,/weder Mindestzahl noch Obergrenze/);assert.match(p,/Nennen\/aufzählen/);assert.match(p,/FACHLICHE VOLLSTÄNDIGKEIT VOR KÜRZE/);assert(!/höchstens zwei|10–30|15–35|Erklären:.*einem kurzen Satz|Phillipskurve|IS-LM/.test(p));
 });
